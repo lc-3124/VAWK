@@ -1,1 +1,87 @@
-[]
+[
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-g++-12",
+      "-std=c++11",
+      "-Wall",
+      "-Wextra",
+      "-fPIC",
+      "-Iinclude",
+      "-c",
+      "src/Va_config.cpp",
+      "-o",
+      "obj/Va_config.o"
+    ],
+    "directory": "/home/lc3124/clone/VAWK",
+    "file": "/home/lc3124/clone/VAWK/src/Va_config.cpp",
+    "output": "/home/lc3124/clone/VAWK/obj/Va_config.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-g++-12",
+      "-std=c++11",
+      "-Wall",
+      "-Wextra",
+      "-fPIC",
+      "-Iinclude",
+      "-c",
+      "src/Va.cpp",
+      "-o",
+      "obj/Va.o"
+    ],
+    "directory": "/home/lc3124/clone/VAWK",
+    "file": "/home/lc3124/clone/VAWK/src/Va.cpp",
+    "output": "/home/lc3124/clone/VAWK/obj/Va.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-g++-12",
+      "-std=c++11",
+      "-Wall",
+      "-Wextra",
+      "-fPIC",
+      "-Iinclude",
+      "-c",
+      "src/VaDisplayingBuffer.cpp",
+      "-o",
+      "obj/VaDisplayingBuffer.o"
+    ],
+    "directory": "/home/lc3124/clone/VAWK",
+    "file": "/home/lc3124/clone/VAWK/src/VaDisplayingBuffer.cpp",
+    "output": "/home/lc3124/clone/VAWK/obj/VaDisplayingBuffer.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-g++-12",
+      "-std=c++11",
+      "-Wall",
+      "-Wextra",
+      "-fPIC",
+      "-Iinclude",
+      "-c",
+      "src/VaEntity.cpp",
+      "-o",
+      "obj/VaEntity.o"
+    ],
+    "directory": "/home/lc3124/clone/VAWK",
+    "file": "/home/lc3124/clone/VAWK/src/VaEntity.cpp",
+    "output": "/home/lc3124/clone/VAWK/obj/VaEntity.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/x86_64-linux-gnu-g++-12",
+      "-std=c++11",
+      "-Wall",
+      "-Wextra",
+      "-fPIC",
+      "-Iinclude",
+      "-c",
+      "src/VaMessage.cpp",
+      "-o",
+      "obj/VaMessage.o"
+    ],
+    "directory": "/home/lc3124/clone/VAWK",
+    "file": "/home/lc3124/clone/VAWK/src/VaMessage.cpp",
+    "output": "/home/lc3124/clone/VAWK/obj/VaMessage.o"
+  }
+]
