@@ -38,7 +38,7 @@ clean:
 train:
 	sl
 
-.PHONY: all cleani train
+.PHONY: all clean train
 
 #关联更新，为了使我的lsp正常工作
 $(OBJ_DIR)/Va_config.o: include/core/Va_config.hpp

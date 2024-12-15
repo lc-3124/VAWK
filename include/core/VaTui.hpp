@@ -598,7 +598,7 @@ class VaSystem {
 
         //获取环境变量
         static std::string getRunningEnvironment(const char *index) {
-            const char *env = std::getenv("PATH");
+            const char *env = std::getenv(index);
             std::string result = "";
             if (env!= nullptr) {
                 result += env;
@@ -903,7 +903,7 @@ bool isAscii(char c) {
     return (c & 0x80) == 0;
 
 }
-
+/*
 // 判断是否为 UTF-8 多字节序列的开头字节
 bool isUtf8StartByte(char c) {
     return (c & 0xC0)!= 0x80 && (c & 0xF0)!= 0xF8 && (c & 0xFE)!= 0xFC;
@@ -927,7 +927,7 @@ bool isUtf8Char(const char* bytes, int len) {
     return false;
 
 }
-
+*/
 // 判断是否为 GBK 编码字符（简单判断，假设连续两个字节都在 GBK 编码范围内）
 bool isGbkChar(const char* bytes, int len) {
     if (len!= 2) return false;
@@ -936,7 +936,6 @@ bool isGbkChar(const char* bytes, int len) {
     return ((firstByte >= 0x81 && firstByte <= 0xFE) && (secondByte >= 0x40 && secondByte <= 0xFE && secondByte!= 0x7F));
 
 }
-
 
 };
 #pragma once
@@ -968,3 +967,4 @@ class VaTui
     public:
 
 };
+extern VaTui Tui;

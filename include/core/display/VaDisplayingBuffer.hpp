@@ -30,7 +30,8 @@ class VaDisplayingBuffer
         struct DisplayingPixel_struct //描述屏幕上一个位置上的字符的结构体
         {
             char* Front;            //文字     -1为透明，而不是空格 
-            char* Color;            //Ansi颜色 -1为透明 
+            char* FrontColor;            //Ansi颜色 -1为透明 
+            char* BackColor;            //Ansi颜色 -1为透明 
             char* speacial;         //Ansi特效 
             int Width;              //该字符实际占用屏幕宽度 -1则表示当前显示单元为多字节字符后的过渡显示单元，Color和speacial将继承左边元素
         };
@@ -64,6 +65,6 @@ class VaDisplayingBuffer
         void frontbar(int x1,int y1,int x2,int y2,char* chara);//只操作字符 
 
         /*对外接口*/
-        vadsbuffermap giveBuffer();         //暴露自己的Drawingmap副本
+        vadsbuffermap* giveBuffer();         //向调用方暴露自己的Drawingbuffer地址,与Entity::CoverWith对应
 
 };
