@@ -81,7 +81,6 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@ && \
 	./outInfo -Co $< $@ || \
 	(./outInfo -Cf $<; exit 1)
-	@echo -e "\n"
 	
 # Build static library
 $(STATIC_LIB): $(OBJS)
@@ -90,7 +89,6 @@ $(STATIC_LIB): $(OBJS)
 	@ar rcs $@ $^ && \
 	./outInfo -Lo static $@ || \
 	(./outInfo -Lf static $@; exit 1)
-	@echo -e "\n"
 	
 # Build shared library
 $(DYNAMIC_LIB): $(OBJS)
@@ -99,14 +97,12 @@ $(DYNAMIC_LIB): $(OBJS)
 	@$(CXX) -shared $^ -o $@ $(SFML_LIBS) && \
 	./outInfo -Lo shared $@ || \
 	(./outInfo -Lf shared $@; exit 1)
-	@echo -e "\n"
 
 # Clean build artifacts
 clean: clean-demo
 	@./outInfo -Cc $(BUILD_PREFIX)
 	@rm -rf $(BUILD_PREFIX)
 	@./outInfo -Clo
-	@echo -e "\n"
 
 clean-demo:
 	@./outInfo -Cc "demo projects"
