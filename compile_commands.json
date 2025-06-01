@@ -1,0 +1,17 @@
+[
+ {
+  "directory": "/data/data/com.termux/files/home/clonework/sf2",
+  "arguments": [
+   "g++",
+   "--std=c++17",
+   "-lsfml-system",
+   "-lsfml-graphics",
+   "-lsfml-window",
+   "-g",
+   "src/main.cpp",
+   "-o",
+   "bin/main"
+  ],
+  "file": "src/main.cpp"
+ }
+]
