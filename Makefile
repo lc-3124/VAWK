@@ -8,21 +8,11 @@
 # in your system
 # 2. g++ , binutils , make , and bin of sfml etc. can be drectly
 # called in your env PATH
-# 3. pip is well installed and your internet connection is good
-# when it first time to make compilecommand.json 
-# 4. your terminal support colorful (ANSI 8bit) output ,and unicode 
+# 3. your terminal support colorful (ANSI 8bit) output ,and unicode 
 # (if doesn't , it don't mean that compiling will be failed )
+# 4. There is a bash script in program root "outInfo", don't 
+# touch it!
 
-
-# Colors definition
-RED          := \033[1;31m
-GREEN        := \033[1;32m
-YELLOW       := \033[1;33m
-BLUE         := \033[1;34m
-MAGENTA      := \033[1;35m
-CYAN         := \033[1;36m
-WHITE        := \033[1;37m
-RESET        := \033[0m
 
 # Basic configuration
 SHELL        := bash
@@ -35,9 +25,9 @@ LIB_NAME     := VAGUI
 # Directory configuration
 INC_DIR      := inc
 SRC_DIR      := src
-DEMO_DIR     := demo
 OBJ_DIR      := $(BUILD_PREFIX)/obj
 LIB_DIR      := $(BUILD_PREFIX)/$(LIB_PREFIX)
+DEMO_DIR     := demo
 
 # Compilation flags
 CXX_FLAGS    := -Wall -Wextra -g -fPIC
@@ -49,91 +39,82 @@ SRCS         := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS         := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
 STATIC_LIB   := $(LIB_DIR)/lib$(LIB_NAME).a
 DYNAMIC_LIB  := $(LIB_DIR)/lib$(LIB_NAME).so
+DEMO_DIR := demo
+DEMO_SUBDIRS := $(wildcard $(DEMO_DIR)/*)
+DEMO_MAKEFILES := $(wildcard \
+				  $(DEMO_DIR)/*/Makefile \
+				  $(DEMO_DIR)/*/makefile \
+				  $(DEMO_DIR)/*/GNUmakefile)
+DEMO_DIRS := $(patsubst %/,%,$(sort $(dir $(DEMO_MAKEFILES))))
+DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/Makefile,%,$(DEMO_MAKEFILES))
+DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/makefile,%,$(DEMO_TARGETS))
+DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/GNUmakefile,%,$(DEMO_TARGETS))
+
 
 # Default target: build both static and shared libraries
-all: static dynamic
-	@echo -e "$(GREEN)[✓] All targets built successfully$(RESET)"
+all: static dynamic demo 
+	@./outInfo -Ba
 
 # Static library target
 static: $(STATIC_LIB)
-	@echo -e "$(GREEN)[✓] Static library ready: $(YELLOW)$(STATIC_LIB)$(RESET)"
 
 # Shared library target
 dynamic: $(DYNAMIC_LIB)
-	@echo -e "$(GREEN)[✓] Shared library ready: $(YELLOW)$(DYNAMIC_LIB)$(RESET)"
 
-# Compile source files with colorful output
+# Demo构建目标
+demo:demo_start $(DEMO_DIRS)
+demo_start:
+	@echo $(DEMO_DIRS)
+	@./outInfo -Bt DemoMakefiles
+
+# Trigger Demo's Makefile 
+$(DEMO_DIRS):
+	@./outInfo -DBt $@
+	@make -C $@ 
+	@./outInfo -Bo $@
+	@echo -e "\n"
+	
+# Compile source files 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
-	@echo -e "$(BLUE)[⚙] Compiling $(MAGENTA)$<$(BLUE) -> $(CYAN)$@$(RESET)"
+	@./outInfo -Ct $< $@
 	@$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@ && \
-	echo -e "$(GREEN)[✓] Successfully compiled $(MAGENTA)$<$(RESET)" || \
-	(echo -e "$(RED)[✗] Failed to compile $(MAGENTA)$<$(RESET)"; exit 1)
-
+	./outInfo -Co $< $@ || \
+	(./outInfo -Cf $<; exit 1)
+	@echo -e "\n"
+	
 # Build static library
 $(STATIC_LIB): $(OBJS)
 	@mkdir -p $(LIB_DIR)
-	@echo -e "$(BLUE)[⚙] Creating static library $(YELLOW)$@$(BLUE) from $(CYAN)$^$(RESET)"
+	@./outInfo -Lt static $(STATIC_LIB)
 	@ar rcs $@ $^ && \
-	echo -e "$(GREEN)[✓] Static library created: $(YELLOW)$@$(RESET)" || \
-	(echo -e "$(RED)[✗] Failed to create static library$(RESET)"; exit 1)
-
+	./outInfo -Lo static $@ || \
+	(./outInfo -Lf static $@; exit 1)
+	@echo -e "\n"
+	
 # Build shared library
 $(DYNAMIC_LIB): $(OBJS)
 	@mkdir -p $(LIB_DIR)
-	@echo -e "$(BLUE)[⚙] Creating shared library $(YELLOW)$@$(BLUE) from $(CYAN)$^$(RESET)"
+	@./outInfo -Lt shared $(DYNAMIC_LIB)
 	@$(CXX) -shared $^ -o $@ $(SFML_LIBS) && \
-	echo -e "$(GREEN)[✓] Shared library created: $(YELLOW)$@$(RESET)" || \
-	(echo -e "$(RED)[✗] Failed to create shared library$(RESET)"; exit 1)
-
-# Build all demos
-DEMO_TARGETS := $(addprefix demo-,$(notdir $(wildcard $(DEMO_DIR)/*)))
-
-demo: $(DEMO_TARGETS)
-	@echo -e "$(GREEN)[✓] All demos built successfully$(RESET)"
-
-demo-%:
-	@echo -e "$(BLUE)[⚙] Building demo: $(CYAN)$*$(RESET)"
-	@$(MAKE) -C $(DEMO_DIR)/$* && \
-	echo -e "$(GREEN)[✓] Demo built: $(CYAN)$*$(RESET)" || \
-	(echo -e "$(RED)[✗] Failed to build demo: $(CYAN)$*$(RESET)"; exit 1)
+	./outInfo -Lo shared $@ || \
+	(./outInfo -Lf shared $@; exit 1)
+	@echo -e "\n"
 
 # Clean build artifacts
-clean:
-	@echo -e "$(YELLOW)[!] Cleaning build artifacts...$(RESET)"
+clean: clean-demo
+	@./outInfo -Cc $(BUILD_PREFIX)
 	@rm -rf $(BUILD_PREFIX)
-	@for dir in $(wildcard $(DEMO_DIR)/*); do \
-		echo -e "$(BLUE)[⚙] Cleaning demo: $(CYAN)$$(basename $$dir)$(RESET)"; \
-		$(MAKE) -C $$dir clean; \
+	@./outInfo -Clo
+	@echo -e "\n"
+
+clean-demo:
+	@./outInfo -Cc "demo projects"
+	@for target in $(DEMO_TARGETS); do \
+		if [ -f $(DEMO_DIR)/$$target/Makefile ]; then \
+			$(MAKE) -C $(DEMO_DIR)/$$target clean || true; \
+		fi \
 	done
-	@echo -e "$(GREEN)[✓] All build artifacts cleaned$(RESET)"
+	@./outInfo -Clo
 
-# check pip and compiledb and make compilecommand
-define compiledb_check
-	@if ! command -v "compiledb" &>/dev/null; then \
-		echo -e "$(RED)[✗] compiledb not installed!$(RESET)"; \
-		echo -e "$(YELLOW)[!] Attempting to install...$(RESET)"; \
-		if ! command -v "pip" &>/dev/null; then \
-			echo -e "$(RED)[✗] pip is also not installed, aborting!$(RESET)"; \
-			exit 1; \
-		else \
-			pip install compiledb; \
-		fi; \
-		if ! command -v "compiledb" &>/dev/null; then \
-			echo -e "$(RED)[✗] Installation failed!$(RESET)"; \
-			exit 1; \
-		else \
-			echo -e "$(GREEN)[✓] compiledb installed successfully$(RESET)"; \
-			compiledb make all; \
-		fi; \
-	else \
-		echo -e "$(BLUE)[⚙] Generating compilation database...$(RESET)"; \
-		compiledb make all; \
-		echo -e "$(GREEN)[✓] Compilation database generated$(RESET)"; \
-	fi
-endef
-
-mkcompilejson:
-	$(call compiledb_check)
-
-.PHONY: all static dynamic demo clean mkcompilejson $(DEMO_TARGETS)
+.PHONY: all static dynamic clean clean-demo $(DEMO_DIRS)

@@ -1,0 +1,160 @@
+#!/bin/bash
+# Build Logger
+# Usage: See help (-h) for command documentation
+
+# lc3124@aliyun.com
+
+
+# Color definitions
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+MAGENTA='\033[1;35m'
+CYAN='\033[1;36m'
+WHITE='\033[1;37m'
+ORANGE='\033[38;5;208m'
+PURPLE='\033[38;5;129m'
+RESET='\033[0m'
+
+# Bracket colors
+PROGRESS_BRACKET="${BLUE}"
+SUCCESS_BRACKET="${GREEN}"
+WARNING_BRACKET="${YELLOW}"
+ERROR_BRACKET="${RED}"
+ACTION_BRACKET="${CYAN}"
+SPECIAL_BRACKET="${PURPLE}"
+
+show_help() {
+    echo -e "
+${GREEN}Generic Build Logger${RESET}
+${CYAN}Compilation Commands:${RESET}
+  -Ct <src> <target>    Start compilation (CompilingTo)
+  -Co <src> [<time>]    Compilation succeeded (CompilingOk)
+  -Cf <src> [<err>]     Compilation failed (CompilingFailed)
+
+${CYAN}Library Commands:${RESET}
+  -Lt <type> <file>     Start lib creation (LibTo)
+    <type>: static|shared
+  -Lo <type> <file>     Lib creation succeeded (LibOk)
+  -Lf <type> <file>     Lib creation failed (LibFailed)
+
+${CYAN}Build Commands:${RESET}
+  -Bt <target>          Start build (BuildTo)
+  -Bo <target>          Build succeeded (BuildOk)
+  -Bf <target>          Build failed (BuildFailed)
+  -Ba                   All Building finished
+  -Bs                   All Building Stopped
+  -DBt <targetDIR>      Start for Demo's Makefile
+${CYAN}Utility Commands:${RESET}
+  -Cc <dir>             Clean directory (CleanCurrent)
+  -Clo                  Cleaning complete (CleanOk)
+  -h                    Show help
+
+${BLUE}Examples:${RESET}
+  $0 -Ct src.cpp obj.o
+  $0 -Co src.cpp 1.2s
+  $0 -Lt static lib.a
+  $0 -Cc build/
+"
+}
+
+validate_args() {
+    local expected=$1
+    local actual=$(( $# - 1 ))
+    if (( actual < expected )); then
+        echo -e "${RED}Error: Command $2 requires $expected arguments${RESET}" >&2
+        show_help >&2
+        exit 1
+    fi
+}
+
+case "$1" in
+    # Compilation commands
+    -Ct)
+        validate_args 2 "$@"
+        echo -e "${PROGRESS_BRACKET}[⚙]${RESET} Compiling ${MAGENTA}$2 ${BLUE}→ ${CYAN}$3${RESET}"
+        ;;
+    -Co)
+        validate_args 1 "$@"
+        msg="${SUCCESS_BRACKET}[✓]${RESET} Compiled ${MAGENTA}$2${RESET}"
+        [[ -n "$3" ]] && msg+=" ${WHITE}($3)${RESET}"
+        echo -e "$msg"
+        ;;
+    -Cf)
+        validate_args 1 "$@"
+        msg="${ERROR_BRACKET}[✗]${RESET} Failed to compile ${MAGENTA}$2${RESET}"
+        [[ -n "$3" ]] && msg+=" ${WHITE}($3)${RESET}"
+        echo -e "$msg"
+        exit 1
+        ;;
+
+    # Library commands
+    -Lt)
+        validate_args 2 "$@"
+        [[ "$2" =~ ^(static|shared)$ ]] || {
+            echo -e "${RED}Error: Invalid lib type '$2' (use static/shared)${RESET}" >&2
+            exit 1
+        }
+        type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
+        echo -e "${ACTION_BRACKET}[🛠]${RESET} Creating ${type_name} library ${YELLOW}$3${RESET}"
+        ;;
+    -Lo)
+        validate_args 2 "$@"
+        type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET} ${type_name} library created: ${YELLOW}$3${RESET}"
+        ;;
+    -Lf)
+        validate_args 2 "$@"
+        type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
+        echo -e "${ERROR_BRACKET}[✗]${RESET} Failed to create ${type_name} library: ${YELLOW}$3${RESET}"
+        exit 1
+        ;;
+
+    # Build commands
+    -Bt)
+        validate_args 1 "$@"
+        echo -e "${WARNING_BRACKET}[!]${RESET} Building target: ${CYAN}$2${RESET}"
+        ;;
+    -Bo)
+        validate_args 1 "$@"
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET} Target built successfully: ${CYAN}$2${RESET}"
+        ;;
+    -Bf)
+        validate_args 1 "$@"
+        echo -e "${ERROR_BRACKET}[✗]${RESET} Failed to build target: ${CYAN}$2${RESET}"
+        exit 1
+        ;;
+    -Ba)
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET}${GREEN} All building tasks completed successfully!${RESET}"
+        ;;
+    -Bs)
+        echo -e "${ERROR_BRACKET}[✗]${RESET}${RED} Building process stopped!${RESET}"
+        exit 1
+        ;;
+    -DBt)
+        validate_args 1 "$@"
+        echo -e "${WARNING_BRACKET}[!]${RESET} Trigger demo directory's makefile: ${CYAN}$2${RESET}"
+        ;;
+    # Clean commands
+    -Cc)
+        validate_args 1 "$@"
+        echo -e "${WARNING_BRACKET}[!]${RESET} Cleaning directory: ${CYAN}$2${RESET}"
+        ;;
+    -Clo)
+        echo -e "${ACTION_BRACKET}[🧹]${RESET} Files have been removed..."
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET} Clean completed"
+        ;;
+
+    # Help
+    -h|--help)
+        show_help
+        ;;
+
+    # Invalid command
+    *)
+        echo -e "${ERROR_BRACKET}[!]${RESET}${RED} Unknown command '$1'${RESET}" >&2
+        show_help >&2
+        exit 1
+        ;;
+esac
