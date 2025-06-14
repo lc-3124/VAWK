@@ -5,6 +5,8 @@ namespace va
 {
 class VaEnity
 {
+    public:
+        void pushEvent();
 };
 };
 

@@ -61,6 +61,7 @@ namespace event
     struct EventBase
     {
         virtual ~EventBase() = default;
+        virtual size_t id();
     };
 
     template < typename T > constexpr bool is_event( const EventBase& e )

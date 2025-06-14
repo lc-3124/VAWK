@@ -1,4 +1,4 @@
-OBJ := $(wildcard ../../obj/*.o)
+OBJ := $(wildcard ../../build/obj/*.o)
 SRCS := $(wildcard *.cpp)
 TARGETS := $(patsubst %.cpp,build/%.run,$(SRCS))
 
