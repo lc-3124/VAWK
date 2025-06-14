@@ -37,20 +37,16 @@ template < typename T > constexpr size_t event_type_id()
     return reinterpret_cast< size_t >( &event_type_id< T > );
 }
 
-struct EventBase
-{
-    virtual ~EventBase() = default;
-};
-
 // define event , for user ;
 // it define a new struct from EventBase
-#define DEFINE_EVENT( T )                                         \
-    template <> size_t event_type_id< T >()                       \
-    {                                                             \
-        static_assert( std::is_base_of_v< EventBase, T > );       \
-        return reinterpret_cast< size_t >( &event_type_id< T > ); \
+#define DEFINE_EVENT( T )                                              \
+    template <> size_t event_type_id< T >()                            \
+    {                                                                  \
+        static_assert( std::is_base_of_v< va::event::EventBase, T > ); \
+        return reinterpret_cast< size_t >( &event_type_id< T > );      \
     }
 
+// must be included in new event's definition.
 #define EVENT_BASE_METHOD                                     \
     static size_t id()                                        \
     {                                                         \
@@ -58,18 +54,28 @@ struct EventBase
         return id;                                            \
     }
 
-template < typename T > constexpr bool is_event( const EventBase& e )
+namespace va
 {
-    return static_cast< const T& >( e ).id() == event_type_id< T >();
-}
-
-template < typename T > const T* getIf( const EventBase& e )
+namespace event
 {
-    if ( is_event< T >( e ) )
-        {
-            return &static_cast< const T& >( e );
-        }
-    return nullptr;
-}
+    struct EventBase
+    {
+        virtual ~EventBase() = default;
+    };
 
+    template < typename T > constexpr bool is_event( const EventBase& e )
+    {
+        return static_cast< const T& >( e ).id() == T::id();
+    }
+
+    template < typename T > const T* getIf( const EventBase& e )
+    {
+        if ( is_event< T >( e ) )
+            {
+                return &static_cast< const T& >( e );
+            }
+        return nullptr;
+    }
+}
+}
 #endif

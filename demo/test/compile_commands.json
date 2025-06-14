@@ -1,0 +1,15 @@
+[
+ {
+  "directory": "/data/data/com.termux/files/home/clonework/VAGUI/demo/test",
+  "arguments": [
+   "g++",
+   "--std=c++20",
+   "-I.",
+   "-I../../inc",
+   "event_define.cpp",
+   "-o",
+   "build/event_define.run"
+  ],
+  "file": "event_define.cpp"
+ }
+]
