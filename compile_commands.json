@@ -1,9 +1,9 @@
 [
  {
-  "directory": "/data/data/com.termux/files/home/clonework/VAGUI",
+  "directory": "/home/lc3124/clonework/VAGUI",
   "arguments": [
    "g++",
-   "--std=c++20",
+   "--std=c++23",
    "-Wall",
    "-Wextra",
    "-g",
@@ -16,23 +16,5 @@
    "build/obj/VaEnity.o"
   ],
   "file": "src/VaEnity.cpp"
- },
- {
-  "directory": "/data/data/com.termux/files/home/clonework/VAGUI",
-  "arguments": [
-   "g++",
-   "--std=c++20",
-   "-Wall",
-   "-Wextra",
-   "-g",
-   "-fPIC",
-   "-I.",
-   "-Iinc/",
-   "-c",
-   "src/VaEventBus.cpp",
-   "-o",
-   "build/obj/VaEventBus.o"
-  ],
-  "file": "src/VaEventBus.cpp"
  }
 ]

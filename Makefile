@@ -4,7 +4,7 @@
 
 # You should run this Makefile in console 
 # Before load this Makfile , Please ensure:
-# 1. g++(c++20) , sfml(ver >= 3.0) has been correctly installed 
+# 1. g++(c++23) , sfml(ver >= 3.0) has been correctly installed 
 # in your system
 # 2. g++ , binutils , make , and bin of sfml etc. can be drectly
 # called in your env PATH
@@ -17,7 +17,7 @@
 # Basic configuration
 SHELL        := bash
 CXX          := g++
-CXX_STD      := --std=c++20
+CXX_STD      := --std=c++23
 BUILD_PREFIX := build
 LIB_PREFIX   := lib
 LIB_NAME     := VAGUI
