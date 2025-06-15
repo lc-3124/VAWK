@@ -4,6 +4,12 @@
 #include "core/VaEventLoop.hpp"
 #include <algorithm>
 
+//TODO:
+// TO FIX :
+// DispatchOnce() 未检查 EventBuffer 是否为空，直接 front() 和 pop() 可能导致程序崩溃（未捕获的异常或未定义行为）。
+// Push() 方法未对 event 参数做空指针检查，理论上可以插入空事件。
+// TO ADD:
+// 没想好
 namespace va
 {
 
