@@ -46,7 +46,7 @@ template < typename T > size_t event_type_id()
 
 // must be included in new event's definition.
 #define EVENT_BASE_METHOD( T ) \
-    static size_t id() { return event_type_id< T >(); }
+    size_t id() const override { return event_type_id< T >(); }
 
 // but you can also use this to simply define a event
 #define VA_EVENT_DEFINE( EventName )               \
@@ -64,13 +64,13 @@ namespace event
 {
     struct EventBase
     {
-        virtual ~EventBase() = default;
-        // virtual size_t id() = 0;
+        virtual ~EventBase()      = default;
+        virtual size_t id() const = 0;
     };
 
     template < typename T > constexpr bool is_event( const EventBase& e )
     {
-        return static_cast< const T& >( e ).id() == T::id();
+        return e.id() == event_type_id< T >();
     }
 
     template < typename T > const T* getIf( const EventBase& e )
