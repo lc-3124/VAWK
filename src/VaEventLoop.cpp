@@ -1,6 +1,3 @@
-#ifndef _VA_EVENTLOOP_CPP
-#define _VA_EVENTLOOP_CPP
-
 #include "core/VaEventLoop.hpp"
 #include <algorithm>
 
@@ -100,19 +97,24 @@ void VaEventLoop::UnRegister( VaEntity* entity, size_t event_id )
 
 void VaEventLoop::DispatchOnce()
 {
-    std::lock_guard< std::mutex > lock( mtx );
-    // If EventBuffer is empty
-
-    if ( this->EventBuffer.empty() ) return;
-    auto oneEvent = this->EventBuffer.front();
-    this->EventBuffer.pop();
-
-    for ( auto iter : this->Listeners[ oneEvent.get()->id() ] )
-        {
-            iter->eventPush( oneEvent );
-        }
+    std::shared_ptr<event::EventBase> oneEvent;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (EventBuffer.empty()) return;
+        oneEvent = EventBuffer.front();
+        EventBuffer.pop();
+    }
+    // it looks like the event is not going to be overflowed 
+    // because in the Push function , we have resized the EventBuffer
+    // However, I also want to to check the event id
+    size_t eid = oneEvent->id();
+    if (eid >= Listeners.size()) return;
+    // push event to all listeners 
+    // this action is without lock , because I need it to be fast
+    for (auto iter : Listeners[eid])
+    {
+        iter->eventPush(oneEvent);
+    }
 }
 
 }  // namespace va
-
-#endif

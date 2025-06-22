@@ -1,6 +1,6 @@
 [
  {
-  "directory": "/home/lc3124/clonework/VAGUI",
+  "directory": "/workspaces/VAGUI",
   "arguments": [
    "g++",
    "--std=c++23",

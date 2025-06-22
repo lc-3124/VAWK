@@ -32,7 +32,7 @@ DEMO_DIR     := demo
 # Compilation flags
 CXX_FLAGS    := -Wall -Wextra -g -fPIC
 INC_FLAGS    := -I. -I$(INC_DIR)/
-SFML_LIBS    := -lsfml-system -lsfml-graphics -lsfml-window
+#SFML_LIBS    := -lsfml-system -lsfml-graphics -lsfml-window
 
 # File collections
 SRCS         := $(wildcard $(SRC_DIR)/*.cpp)

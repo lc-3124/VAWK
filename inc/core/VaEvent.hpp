@@ -1,27 +1,42 @@
 /*
  * VaEvent.hpp
- * Provides a series of functions and macros to define and work with custom
- * event types.
+ * 
+ * This header provides a set of utilities and macros for defining and working with custom event types
+ * in a type-safe and extensible way. It is designed for use in event-driven systems, such as GUI frameworks
+ * or game engines.
  *
- * e.g.
- *VA_EVENT_DEFINE(MouseEvent)
- *      int x,y;
- *      bool isClick;
- *VA_EVENT_DEFINE_END
- * ......
- * MouseEvent oneevent{100,100,1};
- * ......
+ * Features:
+ * - Unique type IDs for each event type at runtime.
+ * - Macros to simplify event type definition.
+ * - Type-safe utilities for event type checking and casting.
+ *
+ * Example usage:
+ *
+ * VA_EVENT_DEFINE(MouseEvent)
+ *     int x, y;
+ *     bool isClick;
+ * VA_EVENT_DEFINE_END
+ *
+ * MouseEvent oneevent{100, 100, 1};
+ *
  * void handleEvent(const EventBase& e)
  * {
- *      if(is_event<MouseEvent>(e))
- *      {
- *          auto& mouse = static_cast<const MouseEvent&>(e);
- *          std::cout<<mouse.x<<mouse.y;
- *          ......
- *      }
+ *     if (is_event<MouseEvent>(e))
+ *     {
+ *         auto& mouse = static_cast<const MouseEvent&>(e);
+ *         std::cout << mouse.x << mouse.y;
+ *     }
  * }
- * ......
  *
+ * Main components:
+ * - event_type_id<T>(): Returns a unique ID for each event type.
+ * - EVENT_BASE_METHOD(T): Implements the required id() method for the event.
+ * - VA_EVENT_DEFINE / VA_EVENT_DEFINE_END: Macros to define new event types.
+ * - is_event<T>(const EventBase&): Checks if an event is of type T.
+ * - getIf<T>(const EventBase&): Returns a pointer to the event if it is of type T, otherwise nullptr.
+ *
+ * All event types must inherit from va::event::EventBase (enforced by the macros).
+ * Thread-safe unique ID generation is ensured via std::atomic.
  */
 
 #ifndef _VAEVENT_HPP_
