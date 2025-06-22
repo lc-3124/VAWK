@@ -4,19 +4,15 @@
 #include "core/VaEventLoop.hpp"
 #include <algorithm>
 
-//TODO:
-// TO FIX :
-// DispatchOnce() 未检查 EventBuffer 是否为空，直接 front() 和 pop() 可能导致程序崩溃（未捕获的异常或未定义行为）。
-// Push() 方法未对 event 参数做空指针检查，理论上可以插入空事件。
-// TO ADD:
-// 没想好
 namespace va
 {
 
-void VaEventLoop::Push( std::shared_ptr< event::EventBase > event )
+bool VaEventLoop::Push( std::shared_ptr< event::EventBase > event )
 {
     std::lock_guard< std::mutex > lock( mtx );
+    if ( event.get() == nullptr ) return 0;
     EventBuffer.push( event );
+    return 1;
 }
 
 void VaEventLoop::Register( size_t index, VaEntity* entity )
@@ -105,10 +101,13 @@ void VaEventLoop::UnRegister( VaEntity* entity, size_t event_id )
 void VaEventLoop::DispatchOnce()
 {
     std::lock_guard< std::mutex > lock( mtx );
-    auto                          oneEvent = this->EventBuffer.front();
+    // If EventBuffer is empty
+
+    if ( this->EventBuffer.empty() ) return;
+    auto oneEvent = this->EventBuffer.front();
     this->EventBuffer.pop();
 
-    for ( auto iter : this->Listeners[oneEvent.get()->id()] )
+    for ( auto iter : this->Listeners[ oneEvent.get()->id() ] )
         {
             iter->eventPush( oneEvent );
         }

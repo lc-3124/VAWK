@@ -1,1 +1,20 @@
-[]
+[
+ {
+  "directory": "/home/lc3124/clonework/VAGUI",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-I.",
+   "-Iinc/",
+   "-c",
+   "src/VaEventLoop.cpp",
+   "-o",
+   "build/obj/VaEventLoop.o"
+  ],
+  "file": "src/VaEventLoop.cpp"
+ }
+]

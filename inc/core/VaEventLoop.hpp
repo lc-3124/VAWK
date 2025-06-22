@@ -37,7 +37,7 @@ class VaEventLoop
 
     public:
     // push a event (struct with argments)
-    void Push( std::shared_ptr< event::EventBase > event );
+    bool Push( std::shared_ptr< event::EventBase > event );
 
     // push entity's ptr into this->Listeners ,by index
     void Register( size_t event_id, VaEntity* entity );
