@@ -1,5 +1,6 @@
 #include "core/VaEventLoop.hpp"
 #include <algorithm>
+#include <thread>
 
 namespace va
 {
@@ -114,6 +115,34 @@ void VaEventLoop::DispatchOnce()
     for (auto iter : Listeners[eid])
     {
         iter->eventPush(oneEvent);
+    }
+}
+
+void VaEventLoop::DispatchAll()
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    while (!EventBuffer.empty())
+    {
+        auto oneEvent = EventBuffer.front();
+        EventBuffer.pop();
+        size_t eid = oneEvent->id();
+        if (eid >= Listeners.size()) continue;
+        // push event to all listeners 
+        for (auto iter : Listeners[eid])
+        {
+            iter->eventPush(oneEvent);
+        }
+    }
+}
+
+// this function is used to run the event loop in a separate thread
+void VaEventLoop::thr_DispatchLoop()
+{
+    while (true)
+    {
+        DispatchOnce();
+        // sleep for a while to avoid busy waiting
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 

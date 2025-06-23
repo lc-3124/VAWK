@@ -62,7 +62,13 @@ int main() {
     va::va_event_loop.Push(evt);
 
     // Dispatch the event (each entity will handle it in its own way)
-    va::va_event_loop.DispatchOnce();
+     // Create and push an event
+    auto evt2 = std::make_shared<MyEvent>();
+    evt2->value = 38;
+    va::va_event_loop.Push(evt2);
 
+    // Dispatch the event (each entity will handle it in its own way)
+    va::va_event_loop.DispatchOnce();
+    va::va_event_loop.DispatchOnce();
     return 0 ;
 }

@@ -44,6 +44,7 @@ class VaEventLoop
 
     // hand out events to all the registered entity
     void DispatchOnce();
+    void DispatchAll();
     void thr_DispatchLoop();
 
     /*

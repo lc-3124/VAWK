@@ -11,7 +11,6 @@ void VaEntity::eventPush(std::shared_ptr<event::EventBase> event)
     handleEvent(event);
 }
 
-// Default event handler (does nothing, to be overridden by user)
 void VaEntity::processOneEvent()
 {
     auto one_event = std::shared_ptr<event::EventBase>(nullptr);
