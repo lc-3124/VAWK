@@ -70,5 +70,12 @@ int main() {
     // Dispatch the event (each entity will handle it in its own way)
     va::va_event_loop.DispatchOnce();
     va::va_event_loop.DispatchOnce();
+
+a.processOneEvent();
+b.processOneEvent();
+c.processOneEvent();
+a.processOneEvent();
+b.processOneEvent();
+c.processOneEvent();
     return 0 ;
 }
