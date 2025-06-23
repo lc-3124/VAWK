@@ -7,8 +7,7 @@ namespace va
 void VaEntity::eventPush(std::shared_ptr<event::EventBase> event)
 {
     std::lock_guard<std::mutex> lock(mtx);
-    EventBuffer.push(event);
-    handleEvent(event);
+    this->EventBuffer.push(event);
 }
 
 void VaEntity::processOneEvent()
