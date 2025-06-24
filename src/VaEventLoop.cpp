@@ -107,11 +107,11 @@ void VaEventLoop::DispatchOnce()
     }
     // it looks like the event is not going to be overflowed 
     // because in the Push function , we have resized the EventBuffer
-    // However, I also want to to check the event id
+    // However, I still want to to check the event id
     size_t eid = oneEvent->id();
     if (eid >= Listeners.size()) return;
     // push event to all listeners 
-    // this action is without lock , because I need it to be fast
+    // this action is without and do not need lock , because I need it to be fast
     for (auto iter : Listeners[eid])
     {
         iter->eventPush(oneEvent);
