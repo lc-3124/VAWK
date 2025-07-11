@@ -9,6 +9,7 @@
 #include <queue>
 #include <unordered_map>
 #include <vector>
+#include <condition_variable>
 
 namespace va
 {
@@ -18,7 +19,8 @@ class VaEventLoop
 {
     protected:
     std::mutex mtx;
-
+    std::condition_variable cv;
+    std::mutex mtx_cv;
     /*
      * Establish two indexes for registrants and events, one using event
      *indexing controls to facilitate event distribution, and the other
@@ -31,8 +33,7 @@ class VaEventLoop
     std::unordered_map< std::shared_ptr<VaEntity>, std::vector< size_t > > Listeners2;
 
     // Cache global events pushed from various sources
-    // Use smart pointers to save memory, but require the pusher to never
-    // actively release events
+    // Use smart pointers to protect memory.
     std::queue< std::shared_ptr< event::EventBase > > EventBuffer;
 
     public:

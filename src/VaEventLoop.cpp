@@ -24,7 +24,7 @@ void VaEventLoop::Register( size_t index, std::shared_ptr<VaEntity> entity )
     // avoid re-registering
     auto& vec = Listeners[ index ];
     auto found = std::find_if(vec.begin(), vec.end(),
-        [&entity](const std::weak_ptr<VaEntity>& wptr) {
+        [&entity](const std::weak_ptr<VaEntity>& wptr) { // ensure enity is not been deleted
             auto sptr = wptr.lock();
             return sptr && sptr == entity;
         });
@@ -118,6 +118,8 @@ void VaEventLoop::DispatchOnce()
     }
     size_t eid = oneEvent->id();
     if (eid >= Listeners.size()) return;
+    // If the entity has been deleted in other threads, it needs to check the weak ptr
+    // to ensure it is still valid before calling eventpush
     for (auto& wptr : Listeners[eid])
     {
         auto sptr = wptr.lock();
@@ -128,6 +130,7 @@ void VaEventLoop::DispatchOnce()
     }
 }
 
+// TODO it looks like the locking is too long , 
 void VaEventLoop::DispatchAll()
 {
     std::lock_guard<std::mutex> lock(mtx);
@@ -153,9 +156,10 @@ void VaEventLoop::thr_DispatchLoop()
 {
     while (true)
     {
+        // not awake until there is an event be pushed in 
+        std::unique_lock<std::mutex> lock(this->mtx_cv);
+        cv.wait(lock, [this] { return !EventBuffer.empty(); });
         DispatchOnce();
-        // sleep for a while to avoid busy waiting
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
