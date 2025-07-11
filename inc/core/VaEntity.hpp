@@ -37,6 +37,7 @@ namespace va
 class VaEntity
 {
 protected:
+// TODO need a lock-free queue
     std::mutex mtx; ///< Mutex for thread-safe access to the event buffer
 
     // Store all events received by this entity (FIFO queue)
@@ -53,7 +54,7 @@ protected:
 
 public:
     /*
-     * Push an event into the buffer and immediately handle it.
+     * Push an event into the buffer and 'handlevent' method will handle it.
      * This function is thread-safe. The event is pushed into the buffer and handleEvent() is called.
      * 
      * event: The event to push.
