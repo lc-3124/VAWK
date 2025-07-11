@@ -26,9 +26,9 @@ class VaEventLoop
      *deregistration.
      */
     // Store events and controls registered here
-    std::vector< std::vector< VaEntity* > > Listeners;
+    std::vector< std::vector< std::weak_ptr<VaEntity> > > Listeners;
     // for deleteing ,
-    std::unordered_map< VaEntity*, std::vector< size_t > > Listeners2;
+    std::unordered_map< std::shared_ptr<VaEntity>, std::vector< size_t > > Listeners2;
 
     // Cache global events pushed from various sources
     // Use smart pointers to save memory, but require the pusher to never
@@ -40,7 +40,7 @@ class VaEventLoop
     bool Push( std::shared_ptr< event::EventBase > event );
 
     // push entity's ptr into this->Listeners ,by index
-    void Register( size_t event_id, VaEntity* entity );
+    void Register( size_t event_id, std::shared_ptr<VaEntity> entity );
 
     // hand out events to all the registered entity
     void DispatchOnce();
@@ -59,9 +59,9 @@ class VaEventLoop
      * events or an event has not been registered by any entity, they
      * should not appear in Listeners2 or Listeners' index
      */
-    void UnRegister( VaEntity* entity );
+    void UnRegister( std::shared_ptr<VaEntity> entity );
     void UnRegister( size_t event );
-    void UnRegister( VaEntity* entity, size_t event_id );
+    void UnRegister( std::shared_ptr<VaEntity> entity, size_t event_id );
 };
 
 static VaEventLoop va_event_loop;
