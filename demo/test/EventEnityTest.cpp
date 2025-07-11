@@ -47,14 +47,14 @@ protected:
 
 int main() {
     // Create entities
-    EntityA a;
-    EntityB b;
-    EntityC c;
+    auto a = std::make_shared<EntityA>();
+    auto b = std::make_shared<EntityB>();
+    auto c = std::make_shared<EntityC>();
 
     // Register entities to listen for MyEvent
-    va::va_event_loop.Register(event_type_id<MyEvent>(), &a);
-    va::va_event_loop.Register(event_type_id<MyEvent>(), &b);
-    va::va_event_loop.Register(event_type_id<MyEvent>(), &c);
+    va::va_event_loop.Register(event_type_id<MyEvent>(), a);
+    va::va_event_loop.Register(event_type_id<MyEvent>(), b);
+    va::va_event_loop.Register(event_type_id<MyEvent>(), c);
 
     // Create and push an event
     auto evt = std::make_shared<MyEvent>();
@@ -71,11 +71,11 @@ int main() {
     va::va_event_loop.DispatchOnce();
     va::va_event_loop.DispatchOnce();
 
-a.processOneEvent();
-b.processOneEvent();
-c.processOneEvent();
-a.processOneEvent();
-b.processOneEvent();
-c.processOneEvent();
+a->processOneEvent();
+b->processOneEvent();
+c->processOneEvent();
+a->processOneEvent();
+b->processOneEvent();
+c->processOneEvent();
     return 0 ;
 }
