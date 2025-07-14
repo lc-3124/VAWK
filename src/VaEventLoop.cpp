@@ -1,5 +1,5 @@
 // VaEventLoop.cpp
-#include "core/VaEventLoop.hpp"
+#include "VaEventLoop.hpp"
 #include <algorithm>
 #include <thread>
 
@@ -180,45 +180,6 @@ void VaEventLoop::DispatchOnce()
     }
 }
 
-void VaEventLoop::DispatchAll()
-{
-    while (true)
-    {
-        std::shared_ptr<event::EventBase> event;
-
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (EventBuffer.empty()) break;
-
-            event = EventBuffer.front();
-            EventBuffer.pop();
-        }
-
-        if (event)
-        {
-            size_t event_id = event->id();
-            if (event_id >= Listeners.size()) continue;
-
-            // Make a copy of listeners to avoid holding lock during dispatch
-            std::vector<std::weak_ptr<VaEntity>> listenersCopy;
-            {
-                std::lock_guard<std::mutex> lock(mtx);
-                listenersCopy = Listeners[event_id];
-            }
-
-            // Dispatch to valid entities
-            for (auto& wptr : listenersCopy)
-            {
-                auto sptr = wptr.lock();
-                if (sptr)
-                {
-                    sptr->eventPush(event);
-                }
-            }
-        }
-    }
-}
-
 void VaEventLoop::thr_DispatchLoop()
 {
     while (running)
@@ -233,34 +194,8 @@ void VaEventLoop::thr_DispatchLoop()
         // Check for termination
         if (!running) break;
 
-        // Process one event
-        if (!EventBuffer.empty())
-        {
-            auto event = EventBuffer.front();
-            EventBuffer.pop();
-            lock.unlock(); // Release lock early
-
-            size_t event_id = event->id();
-            if (event_id < Listeners.size())
-            {
-                // Get copy of listeners with lock
-                std::vector<std::weak_ptr<VaEntity>> listenersCopy;
-                {
-                    std::lock_guard<std::mutex> lock2(mtx);
-                    listenersCopy = Listeners[event_id];
-                }
-
-                // Dispatch event
-                for (auto& wptr : listenersCopy)
-                {
-                    auto sptr = wptr.lock();
-                    if (sptr)
-                    {
-                        sptr->eventPush(event);
-                    }
-                }
-            }
-        }
+        // Process one event using DispatchOnce
+        DispatchOnce();
     }
 }
 
