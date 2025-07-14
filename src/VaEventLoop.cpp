@@ -6,12 +6,6 @@
 namespace va
 {
 
-VaEventLoop& VaEventLoop::GetInstance()
-{
-    static VaEventLoop instance;
-    return instance;
-}
-
 bool VaEventLoop::Push(std::shared_ptr<event::EventBase> event)
 {
     if (!event) return false;
@@ -20,7 +14,6 @@ bool VaEventLoop::Push(std::shared_ptr<event::EventBase> event)
         std::lock_guard<std::mutex> lock(mtx);
         EventBuffer.push(event);
     }
-
     // Notify waiting thread about new event
     cv.notify_one();
     return true;
@@ -35,7 +28,7 @@ void VaEventLoop::Register(size_t event_id, std::shared_ptr<VaEntity> entity)
     // Resize listener vector if necessary
     if (event_id >= Listeners.size())
     {
-        Listeners.resize(event_id + 1);
+        Listeners.resize(event_id + 10);
     }
 
     // Avoid re-registration
@@ -45,7 +38,7 @@ void VaEventLoop::Register(size_t event_id, std::shared_ptr<VaEntity> entity)
             auto sptr = wptr.lock();
             return sptr && sptr == entity;
         });
-
+     // not found
     if (found == vec.end())
     {
         vec.push_back(entity);
@@ -147,35 +140,39 @@ void VaEventLoop::UnRegister(std::shared_ptr<VaEntity> entity, size_t event_id)
 void VaEventLoop::DispatchOnce()
 {
     std::shared_ptr<event::EventBase> event;
-
+    size_t event_id = 0;
+    bool has_event = false;
+    // pop an event
     {
         std::lock_guard<std::mutex> lock(mtx);
         if (EventBuffer.empty()) return;
-
         event = EventBuffer.front();
+        event_id = event->id(); 
         EventBuffer.pop();
+        has_event = true;
     }
+    if (!has_event || !event) return;
 
-    if (event)
+    // check if there is a co vector , refer it
+    std::vector<std::weak_ptr<VaEntity>>* listeners_ptr = nullptr;
     {
-        size_t event_id = event->id();
-        if (event_id >= Listeners.size()) return;
-
-        // Make a copy of listeners to avoid holding lock during dispatch
-        std::vector<std::weak_ptr<VaEntity>> listenersCopy;
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            listenersCopy = Listeners[event_id];
+        std::lock_guard<std::mutex> lock(mtx);
+        if (event_id < Listeners.size() && !Listeners[event_id].empty()) {
+            listeners_ptr = &Listeners[event_id];
         }
+    }
+    if (!listeners_ptr) return;
 
-        // Dispatch to valid entities
-        for (auto& wptr : listenersCopy)
-        {
-            auto sptr = wptr.lock();
-            if (sptr)
-            {
-                sptr->eventPush(event);
-            }
+    // dispatch
+    std::vector<std::weak_ptr<VaEntity>>& listeners = *listeners_ptr;
+    for (auto it = listeners.begin(); it != listeners.end();) {
+        auto sptr = it->lock();
+        if (sptr) {
+            sptr->eventPush(event);
+            ++it;
+        } else {
+            // delete the ptr if its object has been removed
+            it = listeners.erase(it);
         }
     }
 }
