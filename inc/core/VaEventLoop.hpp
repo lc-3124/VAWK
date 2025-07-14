@@ -1,3 +1,4 @@
+// VaEventLoop.hpp
 #ifndef _VA_EVENTLOOP_HPP_
 #define _VA_EVENTLOOP_HPP_
 
@@ -10,62 +11,81 @@
 #include <unordered_map>
 #include <vector>
 #include <condition_variable>
+#include <thread>
+#include <atomic>
 
 namespace va
 {
 
-/// register , absorb , and dispatch events
+/// Register, absorb, and dispatch events
 class VaEventLoop
 {
-    protected:
+protected:
     std::mutex mtx;
     std::condition_variable cv;
-    std::mutex mtx_cv;
+    std::atomic<bool> running{false};
+    std::thread eventThread;
+
     /*
-     * Establish two indexes for registrants and events, one using event
-     *indexing controls to facilitate event distribution, and the other
-     *using control indexing events to facilitate control
-     *deregistration.
-     */
-    // Store events and controls registered here
-    std::vector< std::vector< std::weak_ptr<VaEntity> > > Listeners;
-    // for deleteing ,
-    std::unordered_map< std::shared_ptr<VaEntity>, std::vector< size_t > > Listeners2;
+    Establish two indexes for registrants and events:
+    One using event indexing for efficient event distribution
+    One using entity indexing for efficient entity deregistration
+    */
+    // Store listeners indexed by event ID
+    std::vector<std::vector<std::weak_ptr<VaEntity>>> Listeners;
+    // For quick lookup of events registered by specific entities
+    std::unordered_map<std::shared_ptr<VaEntity>, std::vector<size_t>> Listeners2;
 
-    // Cache global events pushed from various sources
-    // Use smart pointers to protect memory.
-    std::queue< std::shared_ptr< event::EventBase > > EventBuffer;
+    // Buffer for events from various sources
+    // Using smart pointers for memory safety
+    std::queue<std::shared_ptr<event::EventBase>> EventBuffer;
 
-    public:
-    // push a event (struct with argments)
-    bool Push( std::shared_ptr< event::EventBase > event );
+public:
+    // Push an event into the buffer
+    bool Push(std::shared_ptr<event::EventBase> event);
 
-    // push entity's ptr into this->Listeners ,by index
-    void Register( size_t event_id, std::shared_ptr<VaEntity> entity );
+    // Register an entity to listen for a specific event
+    void Register(size_t event_id, std::shared_ptr<VaEntity> entity);
 
-    // hand out events to all the registered entity
+    // Dispatch one event from the buffer
     void DispatchOnce();
+    // Dispatch all events in the buffer
     void DispatchAll();
+    // Event loop running in a separate thread
     void thr_DispatchLoop();
 
     /*
-     * Three different deletion methods
-     * 1. Log an entity out of the eventloop and erase the entity and all
-     * events registered with it.
-     * 2. Cancel an event and erase all entity registrations for that
-     * event.
-     * 3. Only erase the corresponding event registered by the.
-     * corresponding entity.
-     * Of course, if an entity has not registered any
-     * events or an event has not been registered by any entity, they
-     * should not appear in Listeners2 or Listeners' index
-     */
-    void UnRegister( std::shared_ptr<VaEntity> entity );
-    void UnRegister( size_t event );
-    void UnRegister( std::shared_ptr<VaEntity> entity, size_t event_id );
+    Three different unregistration methods:
+    Unregister an entity and all its registered events
+    Unregister all entities from a specific event
+    Unregister a specific event from a specific entity
+    */
+    void UnRegister(std::shared_ptr<VaEntity> entity);
+    void UnRegister(size_t event_id);
+    void UnRegister(std::shared_ptr<VaEntity> entity, size_t event_id);
+
+    // Start/stop the dispatch loop thread
+    void Start();
+    void Stop();
+
+    // Check if the event loop is running
+    bool IsRunning() const { return running; }
+
+    // Singleton instance access
+    static VaEventLoop& GetInstance();
+
+private:
+    // Private constructor for singleton
+    VaEventLoop() = default;
+
+    // Prevent copy and assignment
+    VaEventLoop(const VaEventLoop&) = delete;
+    VaEventLoop& operator=(const VaEventLoop&) = delete;
+
+    // Destructor
+    ~VaEventLoop() { Stop(); }
 };
 
-static VaEventLoop va_event_loop;
+}  // namespace va
 
-};
 #endif
