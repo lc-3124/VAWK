@@ -1,5 +1,7 @@
-#include "core/VaEventLoop.hpp"
+#include "../../inc/core/VaEventRouter.hpp"
 #include <iostream>
+
+va::VaEventRouter va_event_loop;
 
 // Define a custom event type
 VA_EVENT_DEFINE(MyEvent)
@@ -52,24 +54,24 @@ int main() {
     auto c = std::make_shared<EntityC>();
 
     // Register entities to listen for MyEvent
-    va::va_event_loop.Register(event_type_id<MyEvent>(), a);
-    va::va_event_loop.Register(event_type_id<MyEvent>(), b);
-    va::va_event_loop.Register(event_type_id<MyEvent>(), c);
+    va_event_loop.Register(event_type_id<MyEvent>(), a);
+    va_event_loop.Register(event_type_id<MyEvent>(), b);
+    va_event_loop.Register(event_type_id<MyEvent>(), c);
 
     // Create and push an event
     auto evt = std::make_shared<MyEvent>();
     evt->value = 42;
-    va::va_event_loop.Push(evt);
+    va_event_loop.Push(evt);
 
     // Dispatch the event (each entity will handle it in its own way)
      // Create and push an event
     auto evt2 = std::make_shared<MyEvent>();
     evt2->value = 38;
-    va::va_event_loop.Push(evt2);
+    va_event_loop.Push(evt2);
 
     // Dispatch the event (each entity will handle it in its own way)
-    va::va_event_loop.DispatchOnce();
-    va::va_event_loop.DispatchOnce();
+    va_event_loop.DispatchOnce();
+    va_event_loop.DispatchOnce();
 
 a->processOneEvent();
 b->processOneEvent();
