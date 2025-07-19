@@ -15,23 +15,23 @@ void VaEventUpstream::Register( size_t event_id, std::shared_ptr< VaEntity > ent
 
     // Resize listener vector if necessary
     if ( event_id >= Listeners.size() )
-        {
-            Listeners.resize( event_id + 10 );
-        }
+    {
+        Listeners.resize( event_id + 10 );
+    }
 
     // Avoid re-registration
     auto& vec = Listeners[ event_id ];
     auto  found =
-        std::find_if( vec.begin(), vec.end(), [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
-            auto sptr = wptr.lock();
-            return sptr && sptr == entity;
-        } );
+      std::find_if( vec.begin(), vec.end(), [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+          auto sptr = wptr.lock();
+          return sptr && sptr == entity;
+      } );
     // not found
     if ( found == vec.end() )
-        {
-            vec.push_back( entity );
-            Listeners2[ entity ].push_back( event_id );
-        }
+    {
+        vec.push_back( entity );
+        Listeners2[ entity ].push_back( event_id );
+    }
 }
 
 void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity )
@@ -43,23 +43,22 @@ void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity )
     auto                          it = Listeners2.find( entity );
 
     if ( it != Listeners2.end() )
+    {
+        for ( size_t idx : it->second )
         {
-            for ( size_t idx : it->second )
-                {
-                    if ( idx < Listeners.size() )
-                        {
-                            auto& vec = Listeners[ idx ];
-                            vec.erase( std::remove_if(
-                                           vec.begin(), vec.end(),
+            if ( idx < Listeners.size() )
+            {
+                auto& vec = Listeners[ idx ];
+                vec.erase( std::remove_if( vec.begin(), vec.end(),
                                            [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
                                                auto sptr = wptr.lock();
                                                return sptr && sptr == entity;
                                            } ),
-                                       vec.end() );
-                        }
-                }
-            Listeners2.erase( it );
+                           vec.end() );
+            }
         }
+        Listeners2.erase( it );
+    }
 }
 
 void VaEventUpstream::UnRegister( size_t event_id )
@@ -67,32 +66,31 @@ void VaEventUpstream::UnRegister( size_t event_id )
     std::lock_guard< std::mutex > lock( mtx );
 
     if ( event_id < Listeners.size() )
+    {
+        auto& vec = Listeners[ event_id ];
+
+        // Update Listeners2 for all entities in this event
+        for ( auto& wptr : vec )
         {
-            auto& vec = Listeners[ event_id ];
-
-            // Update Listeners2 for all entities in this event
-            for ( auto& wptr : vec )
+            auto sptr = wptr.lock();
+            if ( sptr )
+            {
+                auto it = Listeners2.find( sptr );
+                if ( it != Listeners2.end() )
                 {
-                    auto sptr = wptr.lock();
-                    if ( sptr )
-                        {
-                            auto it = Listeners2.find( sptr );
-                            if ( it != Listeners2.end() )
-                                {
-                                    auto& idxs = it->second;
-                                    idxs.erase( std::remove( idxs.begin(), idxs.end(), event_id ),
-                                                idxs.end() );
+                    auto& idxs = it->second;
+                    idxs.erase( std::remove( idxs.begin(), idxs.end(), event_id ), idxs.end() );
 
-                                    if ( idxs.empty() )
-                                        {
-                                            Listeners2.erase( it );
-                                        }
-                                }
-                        }
+                    if ( idxs.empty() )
+                    {
+                        Listeners2.erase( it );
+                    }
                 }
-
-            vec.clear();
+            }
         }
+
+        vec.clear();
+    }
 }
 
 void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity, size_t event_id )
@@ -114,15 +112,15 @@ void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity, size_t eve
     // Update Listeners2
     auto it = Listeners2.find( entity );
     if ( it != Listeners2.end() )
-        {
-            auto& idxs = it->second;
-            idxs.erase( std::remove( idxs.begin(), idxs.end(), event_id ), idxs.end() );
+    {
+        auto& idxs = it->second;
+        idxs.erase( std::remove( idxs.begin(), idxs.end(), event_id ), idxs.end() );
 
-            if ( idxs.empty() )
-                {
-                    Listeners2.erase( it );
-                }
+        if ( idxs.empty() )
+        {
+            Listeners2.erase( it );
         }
+    }
 }
 
 void VaEventUpstream::eventloopStart()
@@ -142,9 +140,9 @@ void VaEventUpstream::eventloopStop()
     cv.notify_all();  // Wake up the waiting thread
 
     if ( eventThread.joinable() )
-        {
-            eventThread.join();
-        }
+    {
+        eventThread.join();
+    }
 }
 
 }  // namespace va

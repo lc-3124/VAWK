@@ -40,9 +40,9 @@ void VaEventRouter::DispatchOnce()
     {
         std::lock_guard< std::mutex > lock( mtx );
         if ( event_id < Listeners.size() && !Listeners[ event_id ].empty() )
-            {
-                listeners_ptr = &Listeners[ event_id ];
-            }
+        {
+            listeners_ptr = &Listeners[ event_id ];
+        }
     }
     if ( !listeners_ptr )
         return;
@@ -50,37 +50,37 @@ void VaEventRouter::DispatchOnce()
     // dispatch
     std::vector< std::weak_ptr< VaEntity > >& listeners = *listeners_ptr;
     for ( auto it = listeners.begin(); it != listeners.end(); )
+    {
+        auto sptr = it->lock();
+        if ( sptr )
         {
-            auto sptr = it->lock();
-            if ( sptr )
-                {
-                    sptr->eventPush( event );
-                    ++it;
-                }
-            else
-                {
-                    // delete the ptr if its object has been removed
-                    it = listeners.erase( it );
-                }
+            sptr->eventPush( event );
+            ++it;
         }
+        else
+        {
+            // delete the ptr if its object has been removed
+            it = listeners.erase( it );
+        }
+    }
 }
 
 void VaEventRouter::thr_DispatchLoop()
 {
     while ( running )
-        {
-            std::unique_lock< std::mutex > lock( mtx );
+    {
+        std::unique_lock< std::mutex > lock( mtx );
 
-            // Wait for event or termination signal
-            cv.wait( lock, [ this ] { return !EventBuffer.empty() || !running; } );
+        // Wait for event or termination signal
+        cv.wait( lock, [ this ] { return !EventBuffer.empty() || !running; } );
 
-            // Check for termination
-            if ( !running )
-                break;
+        // Check for termination
+        if ( !running )
+            break;
 
-            // Process one event using DispatchOnce
-            DispatchOnce();
-        }
+        // Process one event using DispatchOnce
+        DispatchOnce();
+    }
 }
 
 }  // namespace va

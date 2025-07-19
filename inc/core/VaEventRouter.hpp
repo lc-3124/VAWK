@@ -12,12 +12,12 @@ namespace va
 /// Register, absorb, and dispatch events
 class VaEventRouter : public VaEventUpstream
 {
-protected:
+  protected:
     // Buffer for events from various sources
     // Using smart pointers for memory safety
     std::queue< std::shared_ptr< event::EventBase > > EventBuffer;
 
-public:
+  public:
     // Push an event into the buffer
     bool Push( std::shared_ptr< event::EventBase > event );
 

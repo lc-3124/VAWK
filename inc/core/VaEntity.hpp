@@ -36,7 +36,7 @@ namespace va
  */
 class VaEntity
 {
-protected:
+  protected:
     // TODO need a lock-free queue
     std::mutex mtx;  ///< Mutex for thread-safe access to the event buffer
 
@@ -52,7 +52,7 @@ protected:
      */
     virtual void handleEvent( std::shared_ptr< event::EventBase > event ) = 0;
 
-public:
+  public:
     /*
      * Push an event into the buffer and 'handlevent' method will handle it.
      * This function is thread-safe. The event is pushed into the buffer and handleEvent() is

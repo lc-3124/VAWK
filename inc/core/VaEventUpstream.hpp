@@ -17,7 +17,7 @@ namespace va
 /// for event dispatching
 class VaEventUpstream
 {
-protected:
+  protected:
     std::mutex              mtx;
     std::condition_variable cv;
     std::atomic< bool >     running{ false };
@@ -33,7 +33,7 @@ protected:
     // For quick lookup of events registered by specific entities
     std::unordered_map< std::shared_ptr< VaEntity >, std::vector< size_t > > Listeners2;
 
-public:
+  public:
     // Register an entity to listen for a specific event
     void Register( size_t event_id, std::shared_ptr< VaEntity > entity );
 
