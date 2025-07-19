@@ -22,8 +22,8 @@ void handleEvent( const va::event::EventBase& e )
         {
             auto& shit = static_cast< const ShitEvent& >( e );
             cout << "你在坐标 x:" << shit.x << " y:" << shit.y
-                 << " 的位置拉了一坨屎,大小为:" << shit.size
-                 << " 你给他取名叫做:" << shit.name << "\n";
+                 << " 的位置拉了一坨屎,大小为:" << shit.size << " 你给他取名叫做:" << shit.name
+                 << "\n";
         }
 }
 
@@ -42,6 +42,6 @@ int main()
     cout << ww.id() << "\n";
     cout << wwi.id() << "\n";
     cout << a_pile_of_shi.id() << "\n";
-    cout << event_type_id<ShiEvent>()<<"\n";
+    cout << event_type_id< ShiEvent >() << "\n";
     return 0;
 }

@@ -54,8 +54,8 @@ public:
     void UnRegister( std::shared_ptr< VaEntity > entity, size_t event_id );
 
     // Start/stop the dispatch loop thread
-    void Start();
-    void Stop();
+    void eventloopStart();
+    void eventloopStop();
 
     // Check if the event loop is running
     bool IsRunning() const

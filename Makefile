@@ -5,13 +5,13 @@
 # You should run this Makefile in console 
 # Before load this Makfile , Please ensure:
 # 1. g++(c++23) , sfml(ver >= 3.0) has been correctly installed 
-# in your system
-# 2. g++ , binutils , make , and bin of sfml etc. can be drectly
-# called in your env PATH
+# 	in your system
+# 2. g++ , binutils , make . can be drectly called in your terminal
 # 3. your terminal support colorful (ANSI 8bit) output ,and unicode 
-# (if doesn't , it don't mean that compiling will be failed )
+# 	(if doesn't , it don't mean that compiling will be failed  , however 
+# 	it may makes your compiling logs look like a shit.)
 # 4. There is a bash script in program root "outInfo", don't 
-# touch it!
+# 	touch it!
 
 
 # Basic configuration
@@ -20,36 +20,39 @@ CXX          := g++
 CXX_STD      := --std=c++23
 BUILD_PREFIX := build
 LIB_PREFIX   := lib
-LIB_NAME     := VAGUI
+LIB_NAME     := VAUI
 
 # Directory configuration
 INC_DIR      := inc
 SRC_DIR      := src
 OBJ_DIR      := $(BUILD_PREFIX)/obj
 LIB_DIR      := $(BUILD_PREFIX)/$(LIB_PREFIX)
+DEP_DIR      := $(BUILD_PREFIX)/dep
 DEMO_DIR     := demo
 
-# Compilation flags
-CXX_FLAGS    := -Wall -Wextra -g -fPIC
+# Compilation flags 
+CXX_FLAGS    := -Wall -Wextra -g -fPIC -Werror -fdiagnostics-color=always
 INC_FLAGS    := -I. -I$(INC_DIR)/
-#SFML_LIBS    := -lsfml-system -lsfml-graphics -lsfml-window
 
 # File collections
 SRCS         := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS         := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+DEPS         := $(patsubst $(SRC_DIR)/%.cpp,$(DEP_DIR)/%.d,$(SRCS))
 STATIC_LIB   := $(LIB_DIR)/lib$(LIB_NAME).a
 DYNAMIC_LIB  := $(LIB_DIR)/lib$(LIB_NAME).so
-DEMO_DIR := demo
+DEMO_DIR     := demo
 DEMO_SUBDIRS := $(wildcard $(DEMO_DIR)/*)
 DEMO_MAKEFILES := $(wildcard \
-				  $(DEMO_DIR)/*/Makefile \
-				  $(DEMO_DIR)/*/makefile \
-				  $(DEMO_DIR)/*/GNUmakefile)
-DEMO_DIRS := $(patsubst %/,%,$(sort $(dir $(DEMO_MAKEFILES))))
+                  $(DEMO_DIR)/*/Makefile \
+                  $(DEMO_DIR)/*/makefile \
+                  $(DEMO_DIR)/*/GNUmakefile)
+DEMO_DIRS    := $(patsubst %/,%,$(sort $(dir $(DEMO_MAKEFILES))))
 DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/Makefile,%,$(DEMO_MAKEFILES))
 DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/makefile,%,$(DEMO_TARGETS))
 DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/GNUmakefile,%,$(DEMO_TARGETS))
 
+# including dependence , for triggering any re-compiling 
+-include $(DEPS)
 
 # Default target: build both static and shared libraries
 all: static dynamic demo 
@@ -61,9 +64,9 @@ static: $(STATIC_LIB)
 # Shared library target
 dynamic: $(DYNAMIC_LIB)
 
-# Demo构建目标
-demo:demo_start $(DEMO_DIRS)
-demo_start:
+# Demo building targets
+demo: static dynamic demo_start $(DEMO_DIRS)
+demo_start:	
 	@echo $(DEMO_DIRS)
 	@./outInfo -Bt DemoMakefiles
 
@@ -73,30 +76,30 @@ $(DEMO_DIRS):
 	@make -C $@ 
 	@./outInfo -Bo $@
 	@echo -e "\n"
-	
+    
 # Compile source files 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
-	@mkdir -p $(@D)
+	@mkdir -p $(@D) $(DEP_DIR)
 	@./outInfo -Ct $< $@
-	@$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@ && \
-	./outInfo -Co $< $@ || \
-	(./outInfo -Cf $<; exit 1)
-	
+	@$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@ && \
+		./outInfo -Co  || \
+		(./outInfo -Cf $<; exit 1)
+    
 # Build static library
 $(STATIC_LIB): $(OBJS)
 	@mkdir -p $(LIB_DIR)
 	@./outInfo -Lt static $(STATIC_LIB)
 	@ar rcs $@ $^ && \
-	./outInfo -Lo static $@ || \
-	(./outInfo -Lf static $@; exit 1)
-	
-# Build shared library
+		./outInfo -Lo static $@ || \
+		(./outInfo -Lf static $@; exit 1)
+    
+# Build shared library 
 $(DYNAMIC_LIB): $(OBJS)
 	@mkdir -p $(LIB_DIR)
 	@./outInfo -Lt shared $(DYNAMIC_LIB)
-	@$(CXX) -shared $^ -o $@ $(SFML_LIBS) && \
-	./outInfo -Lo shared $@ || \
-	(./outInfo -Lf shared $@; exit 1)
+	@$(CXX) -shared $^ -o $@ && \
+		./outInfo -Lo shared $@ || \
+		(./outInfo -Lf shared $@; exit 1)
 
 # Clean build artifacts
 clean: clean-demo
@@ -108,9 +111,24 @@ clean-demo:
 	@./outInfo -Cc "demo projects"
 	@for target in $(DEMO_TARGETS); do \
 		if [ -f $(DEMO_DIR)/$$target/Makefile ]; then \
-			$(MAKE) -C $(DEMO_DIR)/$$target clean || true; \
+		$(MAKE) -C $(DEMO_DIR)/$$target clean || true; \
 		fi \
-	done
+		done
 	@./outInfo -Clo
 
-.PHONY: all static dynamic clean clean-demo $(DEMO_DIRS)
+# directories' dependening 
+$(LIB_DIR):
+	@mkdir -p $@
+    
+$(DEP_DIR):
+	@mkdir -p $@
+
+$(OBJ_DIR):
+	@mkdir -p $@
+
+$(STATIC_LIB): | $(LIB_DIR)
+$(DYNAMIC_LIB): | $(LIB_DIR)
+$(OBJS): | $(OBJ_DIR) $(DEP_DIR)
+
+# PHONY
+.PHONY: all static dynamic clean clean-demo demo $(DEMO_DIRS)

@@ -5,7 +5,11 @@ TARGETS := $(patsubst %.cpp,build/%.run,$(SRCS))
 all: $(TARGETS)
 
 build/%.run: %.cpp | build
-	g++ --std=c++23 -I. -I../../inc $< ../../build/lib/libVAGUI.a -o $@
+	@../../outInfo -Ct $< $@
+	@g++ --std=c++23 -I. -I../../inc $< ../../build/lib/libVAUI.a  \
+		-Werror -fdiagnostics-color=always \
+		-o $@
+	@../../outInfo -Co #$< $@
 
 build:
 	mkdir -p build

@@ -67,22 +67,20 @@ void VaEventRouter::DispatchOnce()
 
 void VaEventRouter::thr_DispatchLoop()
 {
-    while (running)
-    {
-        std::unique_lock<std::mutex> lock(mtx);
+    while ( running )
+        {
+            std::unique_lock< std::mutex > lock( mtx );
 
-        // Wait for event or termination signal
-        cv.wait(lock, [this] {
-            return !EventBuffer.empty() || !running;
-        });
+            // Wait for event or termination signal
+            cv.wait( lock, [ this ] { return !EventBuffer.empty() || !running; } );
 
-        // Check for termination
-        if (!running) break;
+            // Check for termination
+            if ( !running )
+                break;
 
-        // Process one event using DispatchOnce
-        DispatchOnce();
-    }
+            // Process one event using DispatchOnce
+            DispatchOnce();
+        }
 }
-
 
 }  // namespace va

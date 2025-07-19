@@ -77,7 +77,7 @@ case "$1" in
         ;;
     -Co)
         validate_args 1 "$@"
-        msg="${SUCCESS_BRACKET}[✓]${RESET} Compiled ${MAGENTA}$2${RESET}"
+        msg="${SUCCESS_BRACKET}[✓]${RESET} Compiled  ${MAGENTA}$2${RESET}"
         [[ -n "$3" ]] && msg+=" ${WHITE}($3)${RESET}"
         echo -e "$msg"
         ;;
@@ -97,7 +97,7 @@ case "$1" in
             exit 1
         }
         type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
-        echo -e "${ACTION_BRACKET}[🛠]${RESET} Creating ${type_name} library ${YELLOW}$3${RESET}"
+        echo -e "${ACTION_BRACKET}[⚙]${RESET} Creating ${type_name} library ${YELLOW}$3${RESET}"
         ;;
     -Lo)
         validate_args 2 "$@"
@@ -142,7 +142,7 @@ case "$1" in
         echo -e "${WARNING_BRACKET}[!]${RESET} Cleaning directory: ${CYAN}$2${RESET}"
         ;;
     -Clo)
-        echo -e "${ACTION_BRACKET}[🧹]${RESET} Files have been removed..."
+        echo -e "${ACTION_BRACKET}[R]${RESET} Files have been removed..."
         echo -e "${SUCCESS_BRACKET}[✓]${RESET} Clean completed"
         ;;
 

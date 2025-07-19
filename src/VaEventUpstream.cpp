@@ -125,16 +125,15 @@ void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity, size_t eve
         }
 }
 
-void VaEventUpstream::Start()
+void VaEventUpstream::eventloopStart()
 {
     if ( running )
         return;
-
     running     = true;
     eventThread = std::thread( &VaEventUpstream::thr_DispatchLoop, this );
 }
 
-void VaEventUpstream::Stop()
+void VaEventUpstream::eventloopStop()
 {
     if ( !running )
         return;

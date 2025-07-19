@@ -1,9 +1,9 @@
 /*
  * VaEvent.hpp
- * 
- * This header provides a set of utilities and macros for defining and working with custom event types
- * in a type-safe and extensible way. It is designed for use in event-driven systems, such as GUI frameworks
- * or game engines.
+ *
+ * This header provides a set of utilities and macros for defining and working with custom event
+ * types in a type-safe and extensible way. It is designed for use in event-driven systems, such as
+ * GUI frameworks or game engines.
  *
  * Features:
  * - Unique type IDs for each event type at runtime.
@@ -33,7 +33,8 @@
  * - EVENT_BASE_METHOD(T): Implements the required id() method for the event.
  * - VA_EVENT_DEFINE / VA_EVENT_DEFINE_END: Macros to define new event types.
  * - is_event<T>(const EventBase&): Checks if an event is of type T.
- * - getIf<T>(const EventBase&): Returns a pointer to the event if it is of type T, otherwise nullptr.
+ * - getIf<T>(const EventBase&): Returns a pointer to the event if it is of type T, otherwise
+ * nullptr.
  *
  * All event types must inherit from va::event::EventBase (enforced by the macros).
  * Thread-safe unique ID generation is ensured via std::atomic.
@@ -60,8 +61,11 @@ template < typename T > size_t event_type_id()
 }
 
 // must be included in new event's definition.
-#define EVENT_BASE_METHOD( T ) \
-    size_t id() const override { return event_type_id< T >(); }
+#define EVENT_BASE_METHOD( T )       \
+    size_t id() const override       \
+    {                                \
+        return event_type_id< T >(); \
+    }
 
 // but you can also use this to simply define a event
 #define VA_EVENT_DEFINE( EventName )               \
