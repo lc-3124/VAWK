@@ -15,6 +15,7 @@ void VaEntity::processOneEvent()
     auto one_event = std::shared_ptr< event::EventBase >( nullptr );
     {
         std::lock_guard< std::mutex > lock( mtx );
+        if( this->EventBuffer.empty() )return;
         one_event = this->EventBuffer.front();
         this->EventBuffer.pop();
         if ( one_event.get() == nullptr )

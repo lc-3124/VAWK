@@ -52,6 +52,11 @@ class VaEntity
      */
     virtual void handleEvent( std::shared_ptr< event::EventBase > event ) = 0;
 
+    /*
+     * String label , used to check it while running
+     */
+    std::string label;
+
   public:
     /*
      * Push an event into the buffer and 'handlevent' method will handle it.
@@ -68,6 +73,12 @@ class VaEntity
      * Useful for asynchronous or deferred event processing.
      */
     virtual void processOneEvent();
+
+    /*
+     * List of Data Interface
+     */
+    std::string getLabel();
+    void        setLabel( std::string nameLabel ){this->label = nameLabel;};
 
     virtual ~VaEntity() = default;
 };

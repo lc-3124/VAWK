@@ -6,7 +6,7 @@ all: $(TARGETS)
 
 build/%.run: %.cpp | build
 	@../../outInfo -Ct $< $@
-	@g++ --std=c++23 -I. -I../../inc $< ../../build/lib/libVAUI.a  \
+	@g++ --std=c++23 -g -O0 -I. -I../../inc $< ../../build/lib/libVAUI.a  \
 		-Werror -fdiagnostics-color=always \
 		-o $@
 	@../../outInfo -Co #$< $@
