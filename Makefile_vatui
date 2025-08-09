@@ -1,0 +1,7 @@
+# Makefile_vatui
+all: Tui-Utils
+
+Tui-Utils:
+  make -C ./Tui-Utils/Makefile
+
+  

@@ -18,7 +18,7 @@ namespace va
 class VaEventUpstream
 {
   protected:
-    std::mutex              mtx;
+    std::mutex              mtx,cv_mtx;
     std::condition_variable cv;
     std::atomic< bool >     running{ false };
     std::thread             eventThread;

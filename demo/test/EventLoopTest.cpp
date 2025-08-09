@@ -22,26 +22,31 @@ void stop_loop();
 VA_EVENT_DEFINE(event_1)
     std::string label = "null";
     void func_printid(){std::cout<< "A: "<< this->id() << std::endl;};
+    event_1( std::string name ){label = name;};
 VA_EVENT_DEFINE_END
 
 VA_EVENT_DEFINE(event_2)
     std::string label = "null";
     void func_printid(){std::cout<< "B: "<< this->id() << std::endl;};
+    event_2( std::string name ){label = name;};
 VA_EVENT_DEFINE_END
 
 VA_EVENT_DEFINE(event_3)
     std::string label = "null";
     void func_printid(){std::cout<< "C: "<< this->id() << std::endl;};
+    event_3( std::string name ){label = name;};
 VA_EVENT_DEFINE_END
 
 VA_EVENT_DEFINE(event_4)
     std::string label = "null";
     void func_printid(){std::cout<< "D: "<< this->id() << std::endl;};
+    event_4( std::string name ){label = name;};
 VA_EVENT_DEFINE_END
 
 VA_EVENT_DEFINE(event_5)
     std::string label = "null";
     void func_printid(){std::cout<< "E: "<< this->id() << std::endl;};
+    event_5( std::string name ){label = name;};
 VA_EVENT_DEFINE_END
 
 // Entities types  definition
@@ -71,11 +76,11 @@ class EntityA : public EntityDemo
     protected:
         void handleEvent(std::shared_ptr< va::event::EventBase > event)
         {
-            std::cout << CYAN << "Entity type A" << RESET << "\n "
+            std::cout << CYAN << "Entity type A" << RESET << "\n"
                 <<"Instance pointer: "<<(unsigned long )this
                 <<"\nReceived event with type ID: "
                 <<  event->id() 
-                <<"And ins label:"<<analyzeEventLabel(event)<<std::endl;
+                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
         };
 };
 
@@ -88,7 +93,7 @@ class EntityB : public EntityDemo
                 <<"Instance pointer: "<<(unsigned long )this
                 <<"\nReceived event with type ID: "
                 <<  event->id()
-                <<"And ins label:"<<analyzeEventLabel(event)<<std::endl;
+                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
         };
 };
 
@@ -101,7 +106,7 @@ class EntityC : public  EntityDemo
                 <<"Instance pointer: "<<(unsigned long )this
                 <<"\nReceived event with type ID: "
                 <<  event->id() 
-                <<"And ins label:"<<analyzeEventLabel(event)<<std::endl;
+                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
         };
 };
 
@@ -271,11 +276,11 @@ void make_event ( std::string name , char type )
 
     std::shared_ptr<va::event::EventBase> temp_event;
     switch (type) {
-        case 'A': temp_event = std::make_shared<event_1>(); break;
-        case 'B': temp_event = std::make_shared<event_2>(); break;
-        case 'C': temp_event = std::make_shared<event_3>(); break;
-        case 'D': temp_event = std::make_shared<event_4>(); break;
-        case 'E': temp_event = std::make_shared<event_5>(); break;
+        case 'A': temp_event = std::make_shared<event_1>(name); break;
+        case 'B': temp_event = std::make_shared<event_2>(name); break;
+        case 'C': temp_event = std::make_shared<event_3>(name); break;
+        case 'D': temp_event = std::make_shared<event_4>(name); break;
+        case 'E': temp_event = std::make_shared<event_5>(name); break;
         default: std::cout << RED << "Invalid event type! Must be A-E" << RESET << std::endl; return;
     }    
     EventContainer.insert({name, temp_event});

@@ -1,0 +1,4 @@
+obj/
+buildDemo/
+build/
+compile_commands.json

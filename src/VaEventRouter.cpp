@@ -6,8 +6,7 @@ namespace va
 
 bool VaEventRouter::Push( std::shared_ptr< event::EventBase > event )
 {
-    if ( !event )
-        return false;
+    if ( !event ) return false;
 
     {
         std::lock_guard< std::mutex > lock( mtx );
@@ -66,11 +65,11 @@ void VaEventRouter::DispatchOnce()
 }
 
 void VaEventRouter::thr_DispatchLoop() {
-    std::unique_lock<std::mutex> lock(mtx);
+    std::unique_lock<std::mutex> lk(cv_mtx);
     while (running) {
-        cv.wait(lock, [this] { 
-            return !EventBuffer.empty() || !running.load(); 
-        });
+        cv.wait(lk, [this] { 
+        return !EventBuffer.empty() || !running.load(); 
+         });
         if (!running) break;
         DispatchOnce();
     }
