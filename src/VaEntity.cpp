@@ -10,19 +10,20 @@ void VaEntity::eventPush( std::shared_ptr< event::EventBase > event )
     this->EventBuffer.push( event );
 }
 
-void VaEntity::processOneEvent()
+int VaEntity::processOneEvent()
 {
     auto one_event = std::shared_ptr< event::EventBase >( nullptr );
     {
         std::lock_guard< std::mutex > lock( mtx );
-        if( this->EventBuffer.empty() )return;
+        if( this->EventBuffer.empty() )return -1;
         one_event = this->EventBuffer.front();
         this->EventBuffer.pop();
         if ( one_event.get() == nullptr )
-            return;
+            return 0;
     }
     // handleEvent is a virtual function , need usr to implement it
     this->handleEvent( one_event );
+    return 1;
 }
 
 }  // namespace va

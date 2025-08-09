@@ -71,8 +71,13 @@ class VaEntity
      * Process one event from the buffer (FIFO).
      * If the buffer is not empty, pops and handles the front event.
      * Useful for asynchronous or deferred event processing.
+     *  
+     *  return:
+     *      1: sucess  ( callback-function has been finished )
+     *      0: bad event
+     *     -1: empty buffer
      */
-    virtual void processOneEvent();
+    virtual int processOneEvent();
 
     /*
      * List of Data Interface
