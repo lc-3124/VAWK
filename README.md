@@ -4,6 +4,10 @@
 
 ## `TODO` *zh_cn*
 
+> ### 高考后恢复步骤提示
+> 重写makefile
+> 翻译TUIutils注释
+
 > 1. [x] 将isevent 和 getif 方法封装到EventBase中
 > 2. [x] 抽象出事件上游类，实现更自由高性能的事件机制。
 > 3. [ ] ```高考```
@@ -20,3 +24,4 @@
 > 5. [ ] Implement VaWindow (in/) for glfw
 > 6. [ ] Similarly, complete the input class
 > 7. [ ] other
+
