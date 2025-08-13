@@ -1,0 +1,3183 @@
+[
+ {
+  "directory": "/data/data/com.termux/files/home/clonework/VAUI",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-Werror",
+   "-fdiagnostics-color=always",
+   "-I.",
+   "-Iinc/",
+   "-MMD",
+   "-MP",
+   "-MF",
+   "build/dep/VaEntity.d",
+   "-c",
+   "src/VaEntity.cpp",
+   "-o",
+   "build/obj/VaEntity.o"
+  ],
+  "file": "src/VaEntity.cpp"
+ },
+ {
+  "directory": "/data/data/com.termux/files/home/clonework/VAUI",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-I.",
+   "-Iinc/",
+   "-c",
+   "src/VaEventRouter.cpp",
+   "-o",
+   "build/obj/VaEventRouter.o"
+  ],
+  "file": "src/VaEventRouter.cpp"
+ },
+ {
+  "directory": "/data/data/com.termux/files/home/clonework/VAUI",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-I.",
+   "-Iinc/",
+   "-c",
+   "src/VaEventUpstream.cpp",
+   "-o",
+   "build/obj/VaEventUpstream.o"
+  ],
+  "file": "src/VaEventUpstream.cpp"
+ }
+]
+MIT License
+
+Copyright (c) 2025 Lc3124
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+# VAGUI  :  Static lib(libVAGUI.a) and Shared lib(libVAGUI.so)
+
+# lc3124@aliyun.com
+
+# You should run this Makefile in console 
+# Before load this Makfile , Please ensure:
+# 1. g++(c++23) , sfml(ver >= 3.0) has been correctly installed 
+# 	in your system
+# 2. g++ , binutils , make . can be drectly called in your terminal
+# 3. your terminal support colorful (ANSI 8bit) output ,and unicode 
+# 	(if doesn't , it don't mean that compiling will be failed  , however 
+# 	it may makes your compiling logs look like a shit.)
+# 4. There is a bash script in program root "outInfo", don't 
+# 	touch it!
+
+
+# Basic configuration
+SHELL        := bash
+CXX          := g++
+CXX_STD      := --std=c++23
+BUILD_PREFIX := build
+LIB_PREFIX   := lib
+LIB_NAME     := VAUI
+
+# Directory configuration
+INC_DIR      := inc
+SRC_DIR      := src
+OBJ_DIR      := $(BUILD_PREFIX)/obj
+LIB_DIR      := $(BUILD_PREFIX)/$(LIB_PREFIX)
+DEP_DIR      := $(BUILD_PREFIX)/dep
+DEMO_DIR     := demo
+
+# Compilation flags 
+CXX_FLAGS    := -Wall -Wextra -g -fPIC -Werror -fdiagnostics-color=always
+INC_FLAGS    := -I. -I$(INC_DIR)/
+
+# File collections
+SRCS         := $(wildcard $(SRC_DIR)/*.cpp)
+OBJS         := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+DEPS         := $(patsubst $(SRC_DIR)/%.cpp,$(DEP_DIR)/%.d,$(SRCS))
+STATIC_LIB   := $(LIB_DIR)/lib$(LIB_NAME).a
+DYNAMIC_LIB  := $(LIB_DIR)/lib$(LIB_NAME).so
+DEMO_DIR     := demo
+DEMO_SUBDIRS := $(wildcard $(DEMO_DIR)/*)
+DEMO_MAKEFILES := $(wildcard \
+                  $(DEMO_DIR)/*/Makefile \
+                  $(DEMO_DIR)/*/makefile \
+                  $(DEMO_DIR)/*/GNUmakefile)
+DEMO_DIRS    := $(patsubst %/,%,$(sort $(dir $(DEMO_MAKEFILES))))
+DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/Makefile,%,$(DEMO_MAKEFILES))
+DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/makefile,%,$(DEMO_TARGETS))
+DEMO_TARGETS := $(patsubst $(DEMO_DIR)/%/GNUmakefile,%,$(DEMO_TARGETS))
+
+# including dependence , for triggering any re-compiling 
+-include $(DEPS)
+
+# Default target: build both static and shared libraries
+all: static dynamic demo 
+	@./outInfo -Ba
+
+# Static library target
+static: $(STATIC_LIB)
+
+# Shared library target
+dynamic: $(DYNAMIC_LIB)
+
+# Demo building targets
+demo: static dynamic demo_start $(DEMO_DIRS)
+demo_start:	
+	@echo $(DEMO_DIRS)
+	@./outInfo -Bt DemoMakefiles
+
+# Trigger Demo's Makefile 
+$(DEMO_DIRS):
+	@./outInfo -DBt $@
+	@make -C $@ 
+	@./outInfo -Bo $@
+	@echo -e "\n"
+    
+# Compile source files 
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(@D) $(DEP_DIR)
+	@./outInfo -Ct $< $@
+	@$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@ && \
+		./outInfo -Co  || \
+		(./outInfo -Cf $<; exit 1)
+    
+# Build static library
+$(STATIC_LIB): $(OBJS)
+	@mkdir -p $(LIB_DIR)
+	@./outInfo -Lt static $(STATIC_LIB)
+	@ar rcs $@ $^ && \
+		./outInfo -Lo static $@ || \
+		(./outInfo -Lf static $@; exit 1)
+    
+# Build shared library 
+$(DYNAMIC_LIB): $(OBJS)
+	@mkdir -p $(LIB_DIR)
+	@./outInfo -Lt shared $(DYNAMIC_LIB)
+	@$(CXX) -shared $^ -o $@ && \
+		./outInfo -Lo shared $@ || \
+		(./outInfo -Lf shared $@; exit 1)
+
+# Clean build artifacts
+clean: clean-demo
+	@./outInfo -Cc $(BUILD_PREFIX)
+	@rm -rf $(BUILD_PREFIX)
+	@./outInfo -Clo
+
+clean-demo:
+	@./outInfo -Cc "demo projects"
+	@for target in $(DEMO_TARGETS); do \
+		if [ -f $(DEMO_DIR)/$$target/Makefile ]; then \
+		$(MAKE) -C $(DEMO_DIR)/$$target clean || true; \
+		fi \
+		done
+	@./outInfo -Clo
+
+# directories' dependening 
+$(LIB_DIR):
+	@mkdir -p $@
+    
+$(DEP_DIR):
+	@mkdir -p $@
+
+$(OBJ_DIR):
+	@mkdir -p $@
+
+$(STATIC_LIB): | $(LIB_DIR)
+$(DYNAMIC_LIB): | $(LIB_DIR)
+$(OBJS): | $(OBJ_DIR) $(DEP_DIR)
+
+# PHONY
+.PHONY: all static dynamic clean clean-demo demo $(DEMO_DIRS)
+# Makefile_vatui
+all: Tui-Utils
+
+Tui-Utils:
+  make -C ./Tui-Utils/Makefile
+
+  
+#!/bin/bash
+# Build Logger
+# Usage: See help (-h) for command documentation
+
+# lc3124@aliyun.com
+
+
+# Color definitions
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+MAGENTA='\033[1;35m'
+CYAN='\033[1;36m'
+WHITE='\033[1;37m'
+ORANGE='\033[38;5;208m'
+PURPLE='\033[38;5;129m'
+RESET='\033[0m'
+
+# Bracket colors
+PROGRESS_BRACKET="${BLUE}"
+SUCCESS_BRACKET="${GREEN}"
+WARNING_BRACKET="${YELLOW}"
+ERROR_BRACKET="${RED}"
+ACTION_BRACKET="${CYAN}"
+SPECIAL_BRACKET="${PURPLE}"
+
+show_help() {
+    echo -e "
+${GREEN}Generic Build Logger${RESET}
+${CYAN}Compilation Commands:${RESET}
+  -Ct <src> <target>    Start compilation (CompilingTo)
+  -Co <src> [<time>]    Compilation succeeded (CompilingOk)
+  -Cf <src> [<err>]     Compilation failed (CompilingFailed)
+
+${CYAN}Library Commands:${RESET}
+  -Lt <type> <file>     Start lib creation (LibTo)
+    <type>: static|shared
+  -Lo <type> <file>     Lib creation succeeded (LibOk)
+  -Lf <type> <file>     Lib creation failed (LibFailed)
+
+${CYAN}Build Commands:${RESET}
+  -Bt <target>          Start build (BuildTo)
+  -Bo <target>          Build succeeded (BuildOk)
+  -Bf <target>          Build failed (BuildFailed)
+  -Ba                   All Building finished
+  -Bs                   All Building Stopped
+  -DBt <targetDIR>      Start for Demo's Makefile
+${CYAN}Utility Commands:${RESET}
+  -Cc <dir>             Clean directory (CleanCurrent)
+  -Clo                  Cleaning complete (CleanOk)
+  -h                    Show help
+
+${BLUE}Examples:${RESET}
+  $0 -Ct src.cpp obj.o
+  $0 -Co src.cpp 1.2s
+  $0 -Lt static lib.a
+  $0 -Cc build/
+"
+}
+
+validate_args() {
+    local expected=$1
+    local actual=$(( $# - 1 ))
+    if (( actual < expected )); then
+        echo -e "${RED}Error: Command $2 requires $expected arguments${RESET}" >&2
+        show_help >&2
+        exit 1
+    fi
+}
+
+case "$1" in
+    # Compilation commands
+    -Ct)
+        validate_args 2 "$@"
+        echo -e "${PROGRESS_BRACKET}[⚙]${RESET} Compiling ${MAGENTA}$2 ${BLUE}→ ${CYAN}$3${RESET}"
+        ;;
+    -Co)
+        validate_args 1 "$@"
+        msg="${SUCCESS_BRACKET}[✓]${RESET} Compiled  ${MAGENTA}$2${RESET}"
+        [[ -n "$3" ]] && msg+=" ${WHITE}($3)${RESET}"
+        echo -e "$msg"
+        ;;
+    -Cf)
+        validate_args 1 "$@"
+        msg="${ERROR_BRACKET}[✗]${RESET} Failed to compile ${MAGENTA}$2${RESET}"
+        [[ -n "$3" ]] && msg+=" ${WHITE}($3)${RESET}"
+        echo -e "$msg"
+        exit 1
+        ;;
+
+    # Library commands
+    -Lt)
+        validate_args 2 "$@"
+        [[ "$2" =~ ^(static|shared)$ ]] || {
+            echo -e "${RED}Error: Invalid lib type '$2' (use static/shared)${RESET}" >&2
+            exit 1
+        }
+        type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
+        echo -e "${ACTION_BRACKET}[⚙]${RESET} Creating ${type_name} library ${YELLOW}$3${RESET}"
+        ;;
+    -Lo)
+        validate_args 2 "$@"
+        type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET} ${type_name} library created: ${YELLOW}$3${RESET}"
+        ;;
+    -Lf)
+        validate_args 2 "$@"
+        type_name=$([ "$2" == "static" ] && echo "Static" || echo "Shared")
+        echo -e "${ERROR_BRACKET}[✗]${RESET} Failed to create ${type_name} library: ${YELLOW}$3${RESET}"
+        exit 1
+        ;;
+
+    # Build commands
+    -Bt)
+        validate_args 1 "$@"
+        echo -e "${WARNING_BRACKET}[!]${RESET} Building target: ${CYAN}$2${RESET}"
+        ;;
+    -Bo)
+        validate_args 1 "$@"
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET} Target built successfully: ${CYAN}$2${RESET}"
+        ;;
+    -Bf)
+        validate_args 1 "$@"
+        echo -e "${ERROR_BRACKET}[✗]${RESET} Failed to build target: ${CYAN}$2${RESET}"
+        exit 1
+        ;;
+    -Ba)
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET}${GREEN} All building tasks completed successfully!${RESET}"
+        ;;
+    -Bs)
+        echo -e "${ERROR_BRACKET}[✗]${RESET}${RED} Building process stopped!${RESET}"
+        exit 1
+        ;;
+    -DBt)
+        validate_args 1 "$@"
+        echo -e "${WARNING_BRACKET}[!]${RESET} Trigger demo directory's makefile: ${CYAN}$2${RESET}"
+        ;;
+    # Clean commands
+    -Cc)
+        validate_args 1 "$@"
+        echo -e "${WARNING_BRACKET}[!]${RESET} Cleaning directory: ${CYAN}$2${RESET}"
+        ;;
+    -Clo)
+        echo -e "${ACTION_BRACKET}[R]${RESET} Files have been removed..."
+        echo -e "${SUCCESS_BRACKET}[✓]${RESET} Clean completed"
+        ;;
+
+    # Help
+    -h|--help)
+        show_help
+        ;;
+
+    # Invalid command
+    *)
+        echo -e "${ERROR_BRACKET}[!]${RESET}${RED} Unknown command '$1'${RESET}" >&2
+        show_help >&2
+        exit 1
+        ;;
+esac
+## Still under developing .......
+
+# VAUI
+
+## `TODO` *zh_cn*
+
+> 1. [x] 将isevent 和 getif 方法封装到EventBase中
+> 2. [x] 抽象出事件上游类，实现更自由高性能的事件机制。
+> 3. [ ] ```高考```
+> 4. [ ] 对照glfw文档，编写窗口类（ VaWindowAbs 纯虚，抽象接口 inc/core/ ）
+> 5. [ ] 针对glfw实现VaWindow （ inc/ ）
+> 6. [ ] 同理完成输入类
+> 7. [ ] other
+
+## `TODO` *en_us*
+> 1. [x] Encapsulate isevent and getif methods into EventBase
+> 2. [x] Abstracts the upstream classes of events to implement a more flexible and high-performance event mechanism.
+> 3. [ ] ```College Entrance Examination```
+> 4. [ ] Write a window class (VaWindowAbs pure virtual, abstract interface inc/core/) based on the glfw document
+> 5. [ ] Implement VaWindow (in/) for glfw
+> 6. [ ] Similarly, complete the input class
+> 7. [ ] other
+# Gui Utils For Vawk
+#include "core/VaEntity.hpp"
+
+namespace va
+{
+
+// Push an event into the entity's buffer and handle it
+void VaEntity::eventPush( std::shared_ptr< event::EventBase > event )
+{
+    std::lock_guard< std::mutex > lock( mtx );
+    this->EventBuffer.push( event );
+}
+
+int VaEntity::processOneEvent()
+{
+    auto one_event = std::shared_ptr< event::EventBase >( nullptr );
+    {
+        std::lock_guard< std::mutex > lock( mtx );
+        if( this->EventBuffer.empty() )return -1;
+        one_event = this->EventBuffer.front();
+        this->EventBuffer.pop();
+        if ( one_event.get() == nullptr )
+            return 0;
+    }
+    // handleEvent is a virtual function , need usr to implement it
+    this->handleEvent( one_event );
+    return 1;
+}
+
+}  // namespace va
+// VaEventRouter.cpp
+#include "core/VaEventRouter.hpp"
+
+namespace va
+{
+
+bool VaEventRouter::Push( std::shared_ptr< event::EventBase > event )
+{
+    if ( !event ) return false;
+
+    {
+        std::lock_guard< std::mutex > lock( mtx );
+        EventBuffer.push( event );
+    }
+    // Notify waiting thread about new event
+    cv.notify_one();
+    return true;
+}
+void VaEventRouter::DispatchOnce()
+{
+    std::shared_ptr< event::EventBase > event;
+    size_t                              event_id  = 0;
+    bool                                has_event = false;
+    // pop an event
+    {
+        std::lock_guard< std::mutex > lock( mtx );
+        if ( EventBuffer.empty() )
+            return;
+        event    = EventBuffer.front();
+        event_id = event->id();
+        EventBuffer.pop();
+        has_event = true;
+    }
+    if ( !has_event || !event )
+        return;
+
+    // check if there is a co vector , refer it
+    std::vector< std::weak_ptr< VaEntity > >* listeners_ptr = nullptr;
+    {
+        std::lock_guard< std::mutex > lock( mtx );
+        if ( event_id < Listeners.size() && !Listeners[ event_id ].empty() )
+        {
+            listeners_ptr = &Listeners[ event_id ];
+        }
+    }
+    if ( !listeners_ptr )
+        return;
+
+    // dispatch
+    std::vector< std::weak_ptr< VaEntity > >& listeners = *listeners_ptr;
+    for ( auto it = listeners.begin(); it != listeners.end(); )
+    {
+        auto sptr = it->lock();
+        if ( sptr )
+        {
+            sptr->eventPush( event );
+            ++it;
+        }
+        else
+        {
+            // delete the ptr if its object has been removed
+            it = listeners.erase( it );
+        }
+    }
+}
+
+void VaEventRouter::thr_DispatchLoop() {
+    std::unique_lock<std::mutex> lk(cv_mtx);
+    while (running) {
+        cv.wait(lk, [this] { 
+        return !EventBuffer.empty() || !running.load(); 
+         });
+        if (!running) break;
+        DispatchOnce();
+    }
+
+    while (!EventBuffer.empty()) {
+        EventBuffer.pop();
+    }
+}
+}  // namespace va
+// VaEventUpstream
+#include "core/VaEventUpstream.hpp"
+#include <algorithm>
+#include <thread>
+
+namespace va
+{
+
+void VaEventUpstream::Register( size_t event_id, std::shared_ptr< VaEntity > entity )
+{
+    if ( !entity )
+        return;
+
+    std::lock_guard< std::mutex > lock( mtx );
+
+    // Resize listener vector if necessary
+    if ( event_id >= Listeners.size() )
+    {
+        Listeners.resize( event_id + 10 );
+    }
+
+    // Avoid re-registration
+    auto& vec = Listeners[ event_id ];
+    auto  found =
+      std::find_if( vec.begin(), vec.end(), [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+          auto sptr = wptr.lock();
+          return sptr && sptr == entity;
+      } );
+    // not found
+    if ( found == vec.end() )
+    {
+        vec.push_back( entity );
+        Listeners2[ entity ].push_back( event_id );
+    }
+}
+
+void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity )
+{
+    if ( !entity )
+        return;
+
+    std::lock_guard< std::mutex > lock( mtx );
+    auto                          it = Listeners2.find( entity );
+
+    if ( it != Listeners2.end() )
+    {
+        for ( size_t idx : it->second )
+        {
+            if ( idx < Listeners.size() )
+            {
+                auto& vec = Listeners[ idx ];
+                vec.erase( std::remove_if( vec.begin(), vec.end(),
+                                           [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+                                               auto sptr = wptr.lock();
+                                               return sptr && sptr == entity;
+                                           } ),
+                           vec.end() );
+            }
+        }
+        Listeners2.erase( it );
+    }
+}
+
+void VaEventUpstream::UnRegister( size_t event_id )
+{
+    std::lock_guard< std::mutex > lock( mtx );
+
+    if ( event_id < Listeners.size() )
+    {
+        auto& vec = Listeners[ event_id ];
+
+        // Update Listeners2 for all entities in this event
+        for ( auto& wptr : vec )
+        {
+            auto sptr = wptr.lock();
+            if ( sptr )
+            {
+                auto it = Listeners2.find( sptr );
+                if ( it != Listeners2.end() )
+                {
+                    auto& idxs = it->second;
+                    idxs.erase( std::remove( idxs.begin(), idxs.end(), event_id ), idxs.end() );
+
+                    if ( idxs.empty() )
+                    {
+                        Listeners2.erase( it );
+                    }
+                }
+            }
+        }
+
+        vec.clear();
+    }
+}
+
+void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity, size_t event_id )
+{
+    if ( !entity || event_id >= Listeners.size() )
+        return;
+
+    std::lock_guard< std::mutex > lock( mtx );
+
+    // Remove from Listeners
+    auto& vec = Listeners[ event_id ];
+    vec.erase( std::remove_if( vec.begin(), vec.end(),
+                               [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+                                   auto sptr = wptr.lock();
+                                   return sptr && sptr == entity;
+                               } ),
+               vec.end() );
+
+    // Update Listeners2
+    auto it = Listeners2.find( entity );
+    if ( it != Listeners2.end() )
+    {
+        auto& idxs = it->second;
+        idxs.erase( std::remove( idxs.begin(), idxs.end(), event_id ), idxs.end() );
+
+        if ( idxs.empty() )
+        {
+            Listeners2.erase( it );
+        }
+    }
+}
+
+void VaEventUpstream::eventloopStart()
+{
+    if ( running )
+        return;
+    running     = true;
+    eventThread = std::thread( &VaEventUpstream::thr_DispatchLoop, this );
+}
+
+void VaEventUpstream::eventloopStop()
+{
+    if ( !running )
+        return;
+
+    running = false;
+    cv.notify_all();  // Wake up the waiting thread
+
+    if ( eventThread.joinable() )
+    {
+        eventThread.join();
+    }
+}
+
+}  // namespace va
+MIT License
+
+Copyright (c) 2024 Lc3124
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+# 编译文件
+# 我只是为了让我的 LSP 正常工作，所以不要在意这个文件是否能有效完成编译任务
+
+# 
+# 这个 Makefile 文件的作用是编译所有源代码为 obj，
+# 然后以 obj 和 inc 为依赖编译所有 test 源码到 build 目录下
+#
+
+# 目录、环境变量
+CC=g++
+CSTD=-std=c++11
+OBJCFLAGS= -I. -Iinc  # 增加对 inc 目录的头文件搜索，通常需要将 inc 目录加入到头文件搜索路径
+TESTCFLAGS=  -Iobj -I. -Iinc -g  # 增加对 inc 目录的头文件搜索，通常需要将 inc 目录加入到头文件搜索路径
+
+# 搜索库源代码，定义 obj 编译目录
+SRCPH = $(wildcard src/Unix/*.cpp)
+OBJPH = $(patsubst src/Unix/%.cpp,obj/%.o,$(SRCPH))
+
+# 搜索测试源代码，定义 build 目录
+TESTPH = $(wildcard test/*.cpp)
+BUILDPH=$(patsubst test/%.cpp,build/%,$(TESTPH))
+
+# 搜索演示源代码，定义 buildDemo 目录
+DEMOPH = $(wildcard demo/*/*.cpp)
+BUILDDEMOPH=$(patsubst demo/%.cpp,buildDemo/%,$(DEMOPH))
+
+# 主目标: 编译 OBJ, 编译 BUILD
+all:pre $(OBJPH) $(BUILDPH) end
+
+# obj 编译规则
+obj/%.o: src/Unix/%.cpp
+	@echo  -e "\n \e[33mNow make \e[32m$<\e[33m to \e[32m$@\e[0m "
+	@mkdir -p $(dir $@) 
+	$(CC) $(CSTD) $(OBJCFLAGS) -c $< -o $@ 
+
+# BUILD 编译规则 TEST
+build/%: test/%.cpp
+	@echo  -e "\n \e[33mNow make \e[32m$<\e[33m to \e[32m$@\e[0m "
+	@mkdir -p $(dir $@)  
+	$(CC) $(CSTD) $(TESTCFLAGS) -o $@ $< $(OBJPH)
+
+# BUILD 编译规则 DEMO
+buildDemo/%: demo/%.cpp
+	@echo  -e "\n \e[33mNow make \e[32m$<\e[33m to \e[32m$@\e[0m "
+	@mkdir -p $(dir $@) 
+	$(CC) $(CSTD) $(TESTCFLAGS) -o $@ $< $(OBJPH)
+
+# 伪目标
+.PHONY: clean pre end 
+
+# 提示语
+pre:
+	@echo  -e "\e[45m Start for Va-utils...... \e[0m\n"
+	@echo  -e "\e[45m Good luck ~    \e[0m"
+	@sleep 1
+
+end:
+	@echo  -e "\n\e[45m Finish!     \e[0m"
+# 清除目录
+clean:
+	rm -rf obj
+	rm -rf build
+	rm -rf buildDemo
+	@echo 3 dirs had been deleted 
+
+debug:
+	@echo $(TESTPH)
+	@echo $(BUILDPH)
+
+# Clone from https://github.com/lc-3124/VA-utils
+
+# VA-utils: 为 VAWK 打造的实用工具库
+
+## 简介
+
+VA-utils 是一组为 VAWK（Visual Ansi Widget kit）开发的工具类集合。VAWK 是一个用 C++ 编写的库，主要用于在控制台中绘制 “窗口” 并处理用户输入，从而实现基于控制台的类图形化用户接口。而 VA-utils 则封装了 ANSI 转义序列和 Linux 系统调用，为 TUI（文本用户界面）开发提供了方便的工具，同时还包含了一些其他实用功能。
+# 主要功能模块
+- 1. VaTui::Color
+
+该类专注于封装 ANSI 转义序列中与颜色控制相关的部分，为开发者提供了丰富的颜色操作功能：
+
+    ANSI 字符串构建：能够生成用于设置不同颜色模式（如 4 位、256 位、RGB 等）下文本前景色和背景色的 ANSI 转义序列字符串。
+    快速输出：实现了快速输出 ANSI 字符串到终端的功能，通过封装系统调用 write() 向标准输出写数据，提高了输出效率。
+    颜色合成与特效：提供了设置文本显示效果（如加粗、下划线等）的功能，以及颜色混合、颜色反转等实用的颜色处理函数。
+    颜色转换：支持不同位数颜色之间的转换，如 RGB 到 ANSI 256 色的转换、ANSI 16 色与 ANSI 256 色之间的转换等，方便在不同颜色支持的终端上实现兼容。
+
+- 2. VaTui::Cursor
+
+与 VaTui::Color 模块类似，该类封装了一系列与终端光标操作相关的函数，通过生成和输出 ANSI 转义序列来实现对终端光标的精确控制：
+
+    光标移动：可以将光标移动到指定的位置，或者按照指定的方向移动光标。
+    光标重置：将光标重置到默认位置（通常是终端屏幕左上角）。
+    光标显示隐藏：可以控制光标的显示和隐藏状态，方便在不同场景下进行光标管理。
+
+- 3. VaTui::System
+
+该类主要用于获取系统的各种信息，为开发者提供了便捷的系统信息获取接口：
+
+    用户信息：可以获取当前用户的用户名。
+    时间信息：获取当前系统时间。
+    环境变量：根据变量名获取对应的环境变量值。
+    设备与主机信息：获取设备名、主机名等信息。
+    运行目录：获取当前程序的运行目录。
+    系统输出：执行指定的系统命令并获取其输出结果。
+
+- 4. VaTui::Term
+
+该类封装了 terminfo 和 termios 等库的大部分功能，为终端的输入输出和其他关键操作提供了支持：
+
+    终端属性管理：可以获取和设置终端的属性，包括保存和恢复终端设置。
+    屏幕控制：实现了清空屏幕、清除一行等功能，方便进行屏幕刷新和清理。
+    输入输出控制：支持非阻塞获取键盘输入、无缓冲输出等操作，提高了输入输出的灵活性和效率。
+    终端信息获取：可以获取终端的类型、大小等信息，以及检查终端是否支持某个特定功能。
+    光标控制：除了基本的光标移动和重置功能外，还可以设置光标形状。
+
+- 5. VaTui::Utf
+
+该类主要用于处理 UTF-8 编码的字符串，提供了一些实用的 UTF-8 字符处理功能：
+
+    字节计数：可以统计一个字符串中 UTF-8 字节的个数。
+    字符提取：能够挑出字符串中内含的某个 UTF-8 字符。
+    字节数量检测：检测某个 UTF-8 字符的字节数量。
+    PS:其实是我不熟悉宽字符处理
+
+- 6. VaUtils::
+
+目前该模块实现了两个实用函数：
+
+    中文字符转拼音：将单个中文字符转换为对应的拼音。
+    中文句子转拼音：将整个中文句子转换为拼音。
+
+# 开发状态
+
+高二快开学了，这几个工程暂时停止开发，后续开发计划将根据时间安排而定，不排除高考之后再动工的可能性
+部分还未完成的模块和计划在VaTui.hpp或VaUitls.hpp的`TODO`注释中声明
+
+# 注意事项
+    部分功能需要终端对 ANSI 转义序列的支持，如果终端不支持这些序列或者对转义字符的解释不符合预期，可能会导致乱码等问题。
+    某些功能在不同操作系统或终端环境下的表现可能会有所差异，请在使用时进行适当的测试和调整。
+
+# 许可证
+本项目采用 MIT 许可证，你可以自由使用、修改和分发本项目的代码，但请遵守许可证的相关规定。
+
+# 文档
+Lc3124与生成式人工智能合作制作了README文档和手册
+手册还有问题但是来不及改了
+
+#ifndef _VATUIENUMS_HPP_
+
+#define _VATUIENUMS_HPP_
+
+// VaCursor类中光标移动的枚举常量
+enum CursorMovement{
+    CUR_LEFT  = 0,
+    CUR_RIGHT = 1,
+    CUR_UP    = 2,
+    CUR_DOWN  = 3,
+};
+
+// 用于定义光标形状的枚举
+enum CursorShape {
+    CURSOR_BLOCK = 0,
+    CURSOR_UNDERLINE = 1,
+    CURSOR_VERTICAL_BAR = 2
+};
+
+// 4位颜色模式下的前景色和背景色枚举定义
+namespace color4bit {
+    enum color_4bit {
+        FRONT_BLACK = 30,
+        FRONT_RED = 31,
+        FRONT_GREEN = 32,
+        FRONT_YELLOW = 33,
+        FRONT_BLUE = 34,
+        FRONT_PURPLE = 35,
+        FRONT_DEEP_GREEN = 36,
+        FRONT_WHITE = 37,
+        BACKGROUND_BLACK = 40,
+        BACKGROUND_RED = 41,
+        BACKGROUND_GREEN = 42,
+        BACKGROUND_YELLOW = 43,
+        BACKGROUND_BLUE = 44,
+        BACKGROUND_PURPLE = 45,
+        BACKGROUND_DEEP_GREEN = 46,
+        BACKGROUND_WHITE = 47
+    };
+}
+
+// 16位颜色模式下的颜色枚举定义
+enum color16 {
+    BLACK = 0,
+    RED = 1,
+    GREEN = 2,
+    YELLOW = 3,
+    BLUE = 4,
+    PURPLE = 5,
+    DEEP_GREEN = 6,
+    WHITE = 7,
+    BRIGHT_BLACK = 8,
+    BRIGHT_RED = 9,
+    BRIGHT_GREEN = 10,
+    BRIGHT_YELLOW = 11,
+    BRIGHT_BLUE = 12,
+    BRIGHT_PURPLE = 13,
+    BRIGHT_DEEP_GREEN = 14,
+    BRIGHT_WHITE = 15
+};
+
+// 定义各种文本显示效果的枚举类型
+enum AnsiEffect {
+    BOLD = 1,
+    DIM = 2,
+    ITALIC = 3,
+    UNDERLINE = 4,
+    BLINK_SLOW = 5,
+    BLINK_FAST = 6,
+    REVERSE = 7,
+    CONCEAL = 8,
+    DELETE = 9
+};
+
+#endif
+/*
+ * (c) 2024 Lc3124
+ * License (MIT)
+ *
+ * 这个文件是VaTui的声明
+ * VaTui包括5个子类，用于
+ * 颜色操作，光标操作，终端控制，系统信息获取，utf字节识别和处理
+ *
+ * 可以看作是一个符号列表
+ *
+ */
+
+/*
+ * PS(29 Dec 24):
+ * 我打算重新决定VaTui类的结构，于是现在现有的源代码都没法马上编译
+ * Makefile也要重写
+ * 于是我把win_src的分支删掉了
+ *
+ * 这个文件我将来会打上详细的英文注释
+ *
+ */
+
+#ifndef _VATUI_FILE_H_
+#define _VATUI_FILE_H_
+
+#include "VaTuiEnums.hpp"
+#include <string>
+
+class VaTui
+{
+  public:
+    class Color;
+    class Cursor;
+    class System;
+    class Term;
+    class Utf;
+};
+
+/*
+ * VaColor class
+ * VaColor 类是用于管理和操作终端文本颜色以及相关显示效果的核心类，
+ * 它提供了一系列静态方法来方便地设置文本的颜色、效果等，
+ * 并且包含了一些用于颜色转换、混合等实用功能的函数
+ */
+class VaTui::Color
+{
+  private:
+    /*
+     * `fastOutput`是一个私有的成员，
+     * 用来实现快速输出文字到终端，
+     * 实际上是对`系统调用write()向标准输出写数据`的封装
+     */
+    static inline void fastOutput ( const char *str );
+
+  public:
+    /*
+     * 以下为颜色输出相关的函数
+     * 使用Ansi转义序列的颜色控制字符实现
+     * 对终端有一定要求，如果终端不支持这些Ansi序列
+     * 或者对转义字符的解释不符合预期效果
+     * 就会导致乱码等
+     *
+     * 以下方法按照返回值类型来分为2种
+     * 例如
+     *
+     * _SetColor256:
+     * 生成用于设置16位颜色模式下文本前景色和背景色的 ansi 转义序列字符串，
+     * 返回该字符串指针。
+     * 按照 ansi
+     * 转义序列中针对16位颜色模式的特定格式，结合传入的前景色和背景色参数，
+     * 使用 snprintf 函数构造相应字符串，
+     * 存储在 escapecommand 数组中供后续输出到终端来改变颜色显示。
+     *
+     * _SetColor256(int front, int background):
+     * 借助 fastoutput 函数输出 _setcolor256 生成的 ansi 转义序列，
+     * 实现将终端文本的前景色和背景色设置为指定的16位颜色模式颜色。
+     *
+     * 使用样例见手册页
+     */
+    static const char *_SetColor4bit ( int front, int background );
+    static void        SetColor4bit ( int front, int background );
+    static const char *_SetColor256 ( int front, int background );
+    static void        SetColor256 ( int front, int background );
+    static const char *_set_background_color_RGB ( int R, int B, int G );
+    static void        set_background_color_RGB ( int R, int B, int G );
+    static const char *_set_front_color_RGB ( int R, int B, int G );
+    static void        set_front_color_RGB ( int R, int B, int G );
+
+    /*
+     * 设置Ansi文字特效
+     *
+     * SetEffect:
+     * 根据传入的文本显示效果枚举值（effect）以及是否启用该效果的布尔值（isEnable），
+     * 生成对应的 ANSI 转义序列字符串，返回该字符串指针。
+     * 如果 isEnable 为 true，则按照启用效果的 ANSI 转义序列格式，
+     * 使用 snprintf 函数构造相应字符串；
+     * 若为 false，则按照禁用效果的格式构造字符串，
+     * 存储在 escapecommand 数组中供后续输出使用。
+     *
+     * 同理，SetEffect用来立即应用_SetEffect的构造结果
+     */
+    static const char *_SetEffect ( short effect, bool isEnable );
+    static void        SetEffect ( short effect, bool isEnable );
+    static const char *_ColorEffectReset ();
+    static void        ColorEffectReset ();
+
+    /*
+     * 其它
+     *
+     * 以下是一些其他的实用颜色处理相关函数，
+     * 包括颜色模式之间的转换、颜色混合以及颜色反转等功能，
+     * 为更复杂的颜色操作需求提供支持，
+     * 方便在不同颜色应用场景中进行灵活的颜色调整和处理。
+     *
+     * PS:(Lc3124)
+     * 说实话，我也不清楚什么时候才会真正用到颜色混合相关的函数
+     * 但其他的，比如颜色格式的转换完全可以用来兼容不同颜色支持的终端
+     * 我相信它们有不错的效果
+     */
+
+    //这些函数名称和签名使其功能显而易见，所以不过多注释
+    static int  RgbToAnsi256Color ( int r, int g, int b );
+    static void Ansi256ColorToRGB ( int ansi256Color, int &r, int &g, int &b );
+    static int  MixAnsi256Colors ( int color1, int color2 );
+    static int  AntiAnsi256Color ( int colorcode );
+    static int  Ansi16ColorToAnsi256 ( int ansi16Color );
+    static int  Ansi256ColorToAnsi16 ( int ansi256Color );
+    // 4bit颜色是有前景和背景之分的，这里根据isFrontOrBack来决定操作对象
+    static int Ansi256ColorToAnsi4bit ( int ansi256Color, bool isFrontOrBack );
+    //因为16色和256色兼容，所以只做4到16色转换
+    //但是4bit颜色是有前景和背景之分的，这里转换后就没有这样的区分了
+    static int Ansi4bitColorToAnsi16 ( int ansi4bitColor );
+};
+
+/*
+ * Functions related to cursor actions.
+ * VaCursor 类封装了一系列与终端光标操作相关的函数，通过生成和输出 ANSI
+ * 转义序列来控制终端光标的位置、显示状态等，为在终端应用中实现自定义的光标行为提供了便捷的方式。
+ */
+class VaTui::Cursor
+{
+  private:
+    //封装write,为特效字符串提供输出
+    static inline void fastOutput ( const char *str );
+
+  public:
+    /*
+     * Functions related to cursor actions.
+     * 以下是与光标操作相关的一系列公共函数，提供了不同类型的光标操作功能，
+     * 例如移动到指定位置、按方向移动以及控制光标显示隐藏等，
+     * 方便开发者根据具体需求灵活操控终端光标。
+     */
+
+    /*
+     * 以下程序用来控制光标移动
+     * 通过构建Ansi转义序列的相关字符和参数来使终端控制光标移动
+     * 但是需要终端的支持
+     */
+    static const char *_CursorMoveTo ( int h, int w );
+    static void        CursorMoveTo ( int h, int w );
+
+    //这个CursorMove方法用来移动光标，dr传入枚举常量参数,ds传入移动方向
+    static const char *_CursorMove ( int dr, int ds );
+
+    static void        CursorMove ( int dr, int ds );
+    static const char *_CursorReset ();
+
+    // 返回用于将光标重置到默认位置（通常是终端屏幕左上角，即第一行第一列）的
+    // ANSI 转义序列字符串。
+    static void        CursorReset ();
+    static const char *_CursorHide ();
+
+    static void        CursorHide ();
+    static const char *_CursorShow ();
+    static void        CursorShow ();
+};
+
+/*
+ * 这个某块用来获取各种系统信息
+ * 比如用户名，运行环境，所在目录等等
+ */
+class VaTui::System
+{
+  public:
+    static std::string getUserName ();
+    static std::string getCurrentTime ();
+
+    //这个需要说明的是此函数用于获取环境变量，index为变量名，返回变量值
+    static std::string getRunningEnvironment ( const char *index );
+
+    static std::string getDeviceName ();
+    static std::string getHostName ();
+    static std::string getRunningDirectory ();
+    static std::string getSystemOuput ( const char *cmd );
+};
+
+/*
+ * 这个模块用于控制终端来实现输入输出和一些关键的操作
+ * 包括了检测终端对某个功能的支持情况、非阻塞获取键盘输入、
+ * 屏幕清空、光标位移、启用或禁用回显等等
+ *
+ * 在linux下的实现是对terminfo,termios等库的封装
+ */
+class VaTui::Term
+{
+
+  public:
+    //这个函数会获取一次终端设置,保存在一个静态变量中
+    static void getTerminalAttributes ();
+    static void setTerminalAttributes ( const struct termios &newAttrs );
+    static void setTerminalAttrsSafely ( const termios &newAttrs );
+    static void getTerminalAttrsSafely ();
+
+    //保存(刷新)终端设置
+    static void SaveTerm ();
+    //恢复终端设置
+    static void RestoreTerm ();
+    //生成用来清空屏幕的Ansi字符串
+    static const char *_Clear ();
+    //上一个函数的直接输出版本
+    static void Clear ();
+    //清除一行
+    static const char *_ClearLine ();
+    static void        ClearLine ();
+    //启用回显
+    static void enableEcho ();
+    static void disableEcho ();
+    //启用控制台缓冲
+    static void enableConsoleBuffering ();
+    static void disableConsoleBuffering ();
+    //获取终端大小
+    static void getTerminalSize ( int &rows, int &cols );
+    //设置光标位置
+    static void setCursorPosition ( int row, int col );
+    static void saveCursorPosition ();
+    static void restoreCursorPosition ();
+    //无缓冲输出
+    static void fastOutput ( const char *str );
+    //类似getch()
+    static char nonBufferedGetKey ();
+    //返回终端类型
+    static const char *getTerminalType ();
+    //启、禁用行缓冲
+    static void setLineBuffering ( bool enable );
+    //类似getch()，但没有终端回显，副作用是执行完后会把回显打开
+    static char getCharacter ();
+    //检查feature是否支持
+    static bool isTerminalFeatureSupported ( const char *feature );
+
+    //关于什么速度设置，我不清楚，按照《Linux/Unix编程手册》实现的
+    void        setCharacterDelay ( int milliseconds );
+    static int  getInputSpeed ();
+    static void setInputSpeed ( int speed );
+    static void setOutputSpeed ( int speed );
+    //无阻塞获取按键，失败就返回-1，否则不返回固定的值
+    static int getkeyPressed ( char &k );
+    //根据传入的枚举常量参数来设置光标形状
+    static void setCursorShape ( CursorShape shape );
+    //所有更改终端和fastOutput都有可能影响到标准输出,
+    //如果你不是在开发一个完全的TUI程序
+    //请使用这个函数刷新标准输出
+    static void FlushStdOut ();
+};
+
+/*
+ * 这个模块用来识别Utf字节，
+ * 当然还有一些其他的功能，也会在之后加入新的功能
+ */
+class VaTui::Utf
+{
+  public:
+    // 检测一段含有UTF字符的字符串的第一个有效字符的内存宽度
+    // 详见手册
+    size_t getUtf8CharWidth ( const char *s );
+    // 根据一个 utf8字符的首位字节来确定该utf8字符的字节数
+    static int  getUtf8ByteCount ( char c );
+    static bool isAscii ( char c );
+    // 判断一个字节是不是utf字符编码字符的开头字节
+    static bool isUtf8StartByte ( char c );
+    // 判断一个常规意义上的字符串是不是一个完整的utf8字符
+    static bool isUtf8Char ( const char *bytes, int len );
+    // 如方法名
+    static bool isGbkChar ( const char *bytes, int len );
+    // 从一段字符串中获取第index个Utf8字符,返回是否成功
+    static bool getUtf8CharaInString ( std::string resource, std::string &save,
+                                       int index );
+    // 获取一个字符串的utf8字符数量
+    static int getUtf8StringLen ( std::string resource );
+    /* TODO */
+    // 获取一个字符串在常规显示屏上的等宽字体tty上占用的宽度
+    static int getStrWidthOs ( std::string resource );
+};
+
+#endif
+[
+ {
+  "directory": "/data/data/com.termux/files/home/clonework/VAGUI/demo/test",
+  "arguments": [
+   "g++",
+   "--std=c++20",
+   "-I.",
+   "-I../../inc",
+   "event_define.cpp",
+   "-o",
+   "build/event_define.run"
+  ],
+  "file": "event_define.cpp"
+ }
+]
+#include "../../inc/core/VaEvent.hpp"
+#include <iostream>
+#include <string>
+using std::cout;
+VA_EVENT_DEFINE( ShitEvent )
+int         x;
+int         y;
+int         size;
+std::string name;
+VA_EVENT_DEFINE_END
+
+VA_EVENT_DEFINE( ShiEvent )
+int         x;
+int         y;
+int         size;
+std::string name;
+VA_EVENT_DEFINE_END
+
+void handleEvent( const va::event::EventBase& e )
+{
+    if ( va::event::is_event< ShitEvent >( e ) )
+        {
+            auto& shit = static_cast< const ShitEvent& >( e );
+            cout << "你在坐标 x:" << shit.x << " y:" << shit.y
+                 << " 的位置拉了一坨屎,大小为:" << shit.size << " 你给他取名叫做:" << shit.name
+                 << "\n";
+        }
+}
+
+int main()
+{
+    ShitEvent a_pile_of_shit, ww;
+    ShiEvent  a_pile_of_shi, wwi;
+    a_pile_of_shit.x    = 103;
+    a_pile_of_shit.y    = 214;
+    a_pile_of_shit.size = 100;
+    a_pile_of_shit.name = "brother";
+
+    va::event::EventBase& one = a_pile_of_shit;
+    handleEvent( one );
+    cout << a_pile_of_shit.id() << "\n";
+    cout << ww.id() << "\n";
+    cout << wwi.id() << "\n";
+    cout << a_pile_of_shi.id() << "\n";
+    cout << event_type_id< ShiEvent >() << "\n";
+    return 0;
+}
+#include "../../inc/core/VaEventRouter.hpp"
+#include <iostream>
+
+va::VaEventRouter va_event_loop;
+
+// Define a custom event type
+VA_EVENT_DEFINE( MyEvent )
+int value;
+VA_EVENT_DEFINE_END
+
+// Entity A: prints the event value
+class EntityA : public va::VaEntity
+{
+protected:
+    void handleEvent( std::shared_ptr< va::event::EventBase > event ) override
+    {
+        if ( va::event::is_event< MyEvent >( *event ) )
+            {
+                auto* myEvt = va::event::getIf< MyEvent >( *event );
+                if ( myEvt )
+                    {
+                        std::cout << "[EntityA] Received MyEvent with value: " << myEvt->value
+                                  << std::endl;
+                    }
+            }
+    }
+};
+
+// Entity B: prints double the event value
+class EntityB : public va::VaEntity
+{
+protected:
+    void handleEvent( std::shared_ptr< va::event::EventBase > event ) override
+    {
+        if ( va::event::is_event< MyEvent >( *event ) )
+            {
+                auto* myEvt = va::event::getIf< MyEvent >( *event );
+                if ( myEvt )
+                    {
+                        std::cout << "[EntityB] Received MyEvent, double value: "
+                                  << ( myEvt->value * 2 ) << std::endl;
+                    }
+            }
+    }
+};
+
+// Entity C: prints the event value squared
+class EntityC : public va::VaEntity
+{
+protected:
+    void handleEvent( std::shared_ptr< va::event::EventBase > event ) override
+    {
+        if ( va::event::is_event< MyEvent >( *event ) )
+            {
+                auto* myEvt = va::event::getIf< MyEvent >( *event );
+                if ( myEvt )
+                    {
+                        std::cout << "[EntityC] Received MyEvent, squared value: "
+                                  << ( myEvt->value * myEvt->value ) << std::endl;
+                    }
+            }
+    }
+};
+
+int main()
+{
+    // Create entities
+    auto a = std::make_shared< EntityA >();
+    auto b = std::make_shared< EntityB >();
+    auto c = std::make_shared< EntityC >();
+
+    // Register entities to listen for MyEvent
+    va_event_loop.Register( event_type_id< MyEvent >(), a );
+    va_event_loop.Register( event_type_id< MyEvent >(), b );
+    va_event_loop.Register( event_type_id< MyEvent >(), c );
+
+    // Create and push an event
+    auto evt   = std::make_shared< MyEvent >();
+    evt->value = 42;
+    va_event_loop.Push( evt );
+
+    // Dispatch the event (each entity will handle it in its own way)
+    // Create and push an event
+    auto evt2   = std::make_shared< MyEvent >();
+    evt2->value = 38;
+    va_event_loop.Push( evt2 );
+
+    // Dispatch the event (each entity will handle it in its own way)
+    va_event_loop.DispatchOnce();
+    va_event_loop.DispatchOnce();
+
+    a->processOneEvent();
+    b->processOneEvent();
+    c->processOneEvent();
+    a->processOneEvent();
+    b->processOneEvent();
+    c->processOneEvent();
+    return 0;
+}
+#include "../../inc/core/VaEventRouter.hpp"
+#include <cstdio>
+#include <iostream>
+#include <cstdlib>
+
+// ANSI color codes
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN    "\033[36m"
+#define WHITE   "\033[37m"
+
+auto eventrouter = new va::VaEventRouter();
+
+// it should be in line 110 + , but I need it be called by `EntityDemo`
+void stop_loop();
+
+// Event types definition
+VA_EVENT_DEFINE(event_1)
+    std::string label = "null";
+    void func_printid(){std::cout<< "A: "<< this->id() << std::endl;};
+    event_1( std::string name ){label = name;};
+VA_EVENT_DEFINE_END
+
+VA_EVENT_DEFINE(event_2)
+    std::string label = "null";
+    void func_printid(){std::cout<< "B: "<< this->id() << std::endl;};
+    event_2( std::string name ){label = name;};
+VA_EVENT_DEFINE_END
+
+VA_EVENT_DEFINE(event_3)
+    std::string label = "null";
+    void func_printid(){std::cout<< "C: "<< this->id() << std::endl;};
+    event_3( std::string name ){label = name;};
+VA_EVENT_DEFINE_END
+
+VA_EVENT_DEFINE(event_4)
+    std::string label = "null";
+    void func_printid(){std::cout<< "D: "<< this->id() << std::endl;};
+    event_4( std::string name ){label = name;};
+VA_EVENT_DEFINE_END
+
+VA_EVENT_DEFINE(event_5)
+    std::string label = "null";
+    void func_printid(){std::cout<< "E: "<< this->id() << std::endl;};
+    event_5( std::string name ){label = name;};
+VA_EVENT_DEFINE_END
+
+// Entities types  definition
+
+class EntityDemo : public va::VaEntity
+{
+    public:
+        std::string analyzeEventLabel ( std::shared_ptr< va::event::EventBase > _event )
+        {
+            std::string one;
+            if( _event->id() == event_type_id< event_1 >()) one = va::event::getIf<event_1>(*_event.get())->label;
+            else if( _event->id() == event_type_id< event_2 >()) one = va::event::getIf<event_2>(*_event.get())->label;
+            else if( _event->id() == event_type_id< event_3 >()) one = va::event::getIf<event_3>(*_event.get())->label;
+            else if( _event->id() == event_type_id< event_4 >()) one = va::event::getIf<event_4>(*_event.get())->label;
+            else if( _event->id() == event_type_id< event_5 >()) one = va::event::getIf<event_5>(*_event.get())->label;
+            else {
+                std::cerr<< RED << "Error: bad event type in EntityDemo::analyzeEventLabel()" << RESET << std::endl;
+                stop_loop();
+                exit(EXIT_FAILURE);
+            }
+            return one;
+        };
+};
+
+class EntityA : public EntityDemo 
+{
+    protected:
+        void handleEvent(std::shared_ptr< va::event::EventBase > event)
+        {
+            std::cout << CYAN << "Entity type A" << RESET << "\n"
+                <<"Instance pointer: "<<(unsigned long )this
+                <<"\nReceived event with type ID: "
+                <<  event->id() 
+                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
+        };
+};
+
+class EntityB : public EntityDemo 
+{
+    protected:
+        void handleEvent(std::shared_ptr< va::event::EventBase > event)
+        {
+            std::cout << CYAN << "Entity type B" << RESET << "\n"
+                <<"Instance pointer: "<<(unsigned long )this
+                <<"\nReceived event with type ID: "
+                <<  event->id()
+                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
+        };
+};
+
+class EntityC : public  EntityDemo 
+{
+    protected:
+        void handleEvent(std::shared_ptr< va::event::EventBase > event)
+        {
+            std::cout << CYAN << "Entity type C" << RESET << "\n"
+                <<"Instance pointer: "<<(unsigned long )this
+                <<"\nReceived event with type ID: "
+                <<  event->id() 
+                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
+        };
+};
+
+std::unordered_map< std::string , std::shared_ptr<va::event::EventBase> > EventContainer;
+std::unordered_map< std::string , std::shared_ptr<va::VaEntity> > EntityContainer;
+
+void make_event ( std::string name , char type );
+void make_entity( std::string name , char   type );
+void bond( std::string nameevent , std::string nameentity);
+void unbond( std::string nameevent , std::string nameentity);
+void list_con( std::string name );
+void start_loop();
+void go_process();
+
+
+int main(int argc , char** argv)
+{
+
+    while( true )
+    {
+        std::string cmd, arg1, arg2, arg3;
+        
+        // Prompt for command input
+        std::cout << BLUE << ">> " << RESET;
+        std::cin >> cmd;
+
+        if ( cmd == "make" )
+        {
+            std::cout << YELLOW << "Enter type (event/entity): " << RESET;
+            std::cin >> arg1;
+            
+            if (arg1 == "event") 
+            {
+                std::cout << YELLOW << "Enter event type (A-E): " << RESET;
+                std::cin >> arg2;
+                
+                std::cout << YELLOW << "Enter event name: " << RESET;
+                std::cin >> arg3;
+                
+                if (arg2.size() == 1) {
+                    make_event(arg3, arg2[0]);
+                } else {
+                    std::cout << RED << "Invalid event type format!" << RESET << std::endl;
+                }
+            }
+            else if (arg1 == "entity") 
+            {
+                std::cout << YELLOW << "Enter entity type (A-C): " << RESET;
+                std::cin >> arg2;
+                
+                std::cout << YELLOW << "Enter entity name: " << RESET;
+                std::cin >> arg3;
+                
+                if (arg2.size() == 1) {
+                    make_entity(arg3, arg2[0]);
+                } else {
+                    std::cout << RED << "Invalid entity type format!" << RESET << std::endl;
+                }
+            }
+            else {
+                std::cout << RED << "Invalid make subcommand!" << RESET << std::endl;
+            }
+        }
+        else if ( cmd == "bond" )
+        {
+            std::cout << YELLOW << "Enter event type (A-E): " << RESET;
+            std::cin >> arg1;
+            
+            std::cout << YELLOW << "Enter entity name: " << RESET;
+            std::cin >> arg2;
+            
+            bond(arg1, arg2);
+        }
+        else if ( cmd == "unbond" )
+        {
+            std::cout << YELLOW << "Enter event type (A-E): " << RESET;
+            std::cin >> arg1;
+            
+            std::cout << YELLOW << "Enter entity name: " << RESET;
+            std::cin >> arg2;
+            
+            unbond(arg1, arg2);
+        }
+        else if ( cmd == "list" )
+        {
+            std::cout << YELLOW << "Enter container to list (event/entity): " << RESET;
+            std::cin >> arg1;
+            
+            list_con(arg1);
+        }
+        else if ( cmd == "shot" )
+        {
+            std::cout << YELLOW << "Enter event name to trigger: " << RESET;
+            std::cin >> arg1;
+
+            auto it = EventContainer.find(arg1);
+            if (it != EventContainer.end()) {
+                eventrouter->Push(it->second);
+                EventContainer.erase( arg1 );
+                std::cout << GREEN << "Event '" << arg1 << "' triggered!" << RESET << std::endl;
+            } else {
+                std::cout << RED << "Event '" << arg1 << "' not found!" << RESET << std::endl;
+            }
+        }
+        else if ( cmd == "start")
+        {
+            start_loop();
+        }
+        else if ( cmd == "stop" )
+        {
+            stop_loop();
+        }
+        else if ( cmd == "exit")
+        { 
+            stop_loop();
+            break;
+        }
+        else if ( cmd == "clear")
+        { 
+            system("clear");
+        }
+        else if ( cmd == "help" )
+        {
+            std::cout << MAGENTA <<
+                "Available commands:\n"<<
+                "make   - Create event or entity\n"<<
+                "bond   - Bind event to entity\n"<<
+                "unbond - Unbind event from entity\n"<<
+                "list   - List contents of container\n"<<
+                "shot   - Trigger specified event\n"<<
+                "start  - Start event loop\n"<<
+                "stop   - Stop event loop\n"<<
+                "exit   - Exit program\n"<<
+                "clear  - Clear screen\n"<<
+                "help   - Show this help message\n"<<
+                "go     - Tell to process all event\n"<< //TODO
+                "ls     - Show available types\n"<< RESET << std::endl;
+        }
+        else if ( cmd == "ls")
+        { 
+            std::cout << MAGENTA <<
+                "Event types:  A,B,C,D,E \n"<<
+                "Entity types: A,B,C\n" << RESET;
+        }
+        else if ( cmd == "go")
+        {
+            std::cout<<YELLOW<<" Event process go!"<<RESET<<std::endl;
+            go_process();
+        }
+        else 
+        {
+            std::cout << RED << "Unknown command! Enter help for available commands" << RESET << std::endl;
+        }
+
+    }
+
+    delete eventrouter;
+    return EXIT_SUCCESS;
+}
+
+void make_event ( std::string name , char type )
+{
+    if (EventContainer.find(name) != EventContainer.end()) {
+        std::cout << RED << "Event '" << name << "' already exists!" << RESET << std::endl;
+        return;
+    }
+
+    std::shared_ptr<va::event::EventBase> temp_event;
+    switch (type) {
+        case 'A': temp_event = std::make_shared<event_1>(name); break;
+        case 'B': temp_event = std::make_shared<event_2>(name); break;
+        case 'C': temp_event = std::make_shared<event_3>(name); break;
+        case 'D': temp_event = std::make_shared<event_4>(name); break;
+        case 'E': temp_event = std::make_shared<event_5>(name); break;
+        default: std::cout << RED << "Invalid event type! Must be A-E" << RESET << std::endl; return;
+    }    
+    EventContainer.insert({name, temp_event});
+    std::cout << GREEN << "Created event '" << name << "' (type " << type << ")" << RESET << std::endl;
+}
+
+void make_entity( std::string name , char type )
+{
+    if (EntityContainer.find(name) != EntityContainer.end()) {
+        std::cout << RED << "Entity '" << name << "' already exists!" << RESET << std::endl;
+        return;
+    }
+
+    std::shared_ptr<va::VaEntity> temp_entity;
+    switch (type) {
+        case 'A': temp_entity = std::make_shared<EntityA>(); break;
+        case 'B': temp_entity = std::make_shared<EntityB>(); break;
+        case 'C': temp_entity = std::make_shared<EntityC>(); break;
+        default: std::cout << RED << "Invalid entity type! Must be A-C" << RESET << std::endl; return;
+    }
+    temp_entity->setLabel(name);
+    EntityContainer.insert({name, temp_entity});
+    std::cout << GREEN << "Created entity '" << name << "' (type " << type << ")" << RESET << std::endl;
+}
+
+void bond( std::string event_type , std::string nameentity)
+{
+    size_t event_id;
+    switch (event_type[0]) {
+        case 'A': event_id = event_type_id<event_1>(); break;
+        case 'B': event_id = event_type_id<event_2>(); break;
+        case 'C': event_id = event_type_id<event_3>(); break;
+        case 'D': event_id = event_type_id<event_4>(); break;
+        case 'E': event_id = event_type_id<event_5>(); break;
+        default: std::cout << RED << "Bond failed: Invalid event type!" << RESET << std::endl; return;
+    }
+
+    auto ent_it = EntityContainer.find(nameentity);
+    if (ent_it == EntityContainer.end()) {
+        std::cout << RED << "Bond failed: Entity '" << nameentity << "' not found!" << RESET << std::endl;
+        return;
+    }
+
+    eventrouter->Register(event_id, ent_it->second);
+    std::cout << GREEN << "Bonded event type " << event_type << " to entity '" << nameentity << "'" << RESET << std::endl;
+}
+
+void unbond( std::string event_type , std::string nameentity)
+{
+    size_t event_id;
+    switch (event_type[0]) {
+        case 'A': event_id = event_type_id<event_1>(); break;
+        case 'B': event_id = event_type_id<event_2>(); break;
+        case 'C': event_id = event_type_id<event_3>(); break;
+        case 'D': event_id = event_type_id<event_4>(); break;
+        case 'E': event_id = event_type_id<event_5>(); break;
+        default: std::cout << RED << "Unbond failed: Invalid event type!" << RESET << std::endl; return;
+    }
+
+    auto ent_it = EntityContainer.find(nameentity);
+    if (ent_it == EntityContainer.end()) {
+        std::cout << RED << "Unbond failed: Entity '" << nameentity << "' not found!" << RESET << std::endl;
+        return;
+    }
+
+    eventrouter->UnRegister(ent_it->second, event_id);
+    std::cout << GREEN << "Unbonded event type " << event_type << " from entity '" << nameentity << "'" << RESET << std::endl;
+}
+
+void list_con( std::string name )
+{
+    if (name == "event") {
+        std::cout << WHITE << "Event Container (" << EventContainer.size() << " items):" << RESET << std::endl;
+        for (const auto& pair : EventContainer) {
+            std::cout << "  " << pair.first << std::endl;
+        }
+    }
+    else if (name == "entity") {
+        std::cout << WHITE << "Entity Container (" << EntityContainer.size() << " items):" << RESET << std::endl;
+        for (const auto& pair : EntityContainer) {
+            std::cout << "  " << pair.first << std::endl;
+        }
+    }
+    else {
+        std::cout << RED << "Unknown container! Use 'event' or 'entity'" << RESET << std::endl;
+    }
+}
+
+void start_loop()
+{
+    if (eventrouter->IsRunning()) {
+        std::cout << YELLOW << "Event loop is already running!" << RESET << std::endl;
+    } else {
+        eventrouter->eventloopStart();
+        std::cout << GREEN << "Event loop started" << RESET << std::endl;
+    }
+}
+
+void stop_loop()
+{
+    if (!eventrouter->IsRunning()) {
+        std::cout << YELLOW << "Event loop is not running!" << RESET << std::endl;
+    } else {
+        eventrouter->eventloopStop();
+        std::cout << GREEN << "Event loop stopped" << RESET << std::endl;
+    }
+}
+    
+void go_process()
+{
+    for(  auto itr_ent : EntityContainer )
+    {
+        while( true )
+        {
+            int fi = itr_ent.second->processOneEvent();
+            if ( fi == -1 )break;
+        }
+    }
+}
+OBJ := $(wildcard ../../build/obj/*.o)
+SRCS := $(wildcard *.cpp)
+TARGETS := $(patsubst %.cpp,build/%.run,$(SRCS))
+
+all: $(TARGETS)
+
+build/%.run: %.cpp | build
+	@../../outInfo -Ct $< $@
+	@g++ --std=c++23 -g -O0 -I. -I../../inc $< ../../build/lib/libVAUI.a  \
+		-Werror -fdiagnostics-color=always \
+		-o $@
+	@../../outInfo -Co #$< $@
+
+build:
+	mkdir -p build
+
+clean:
+	rm -rf build
+#ifndef _VA_ENTITY_HPP_
+#define _VA_ENTITY_HPP_
+
+#include "VaEvent.hpp"
+#include <memory>
+#include <mutex>
+#include <queue>
+
+namespace va
+{
+
+/*
+ * The base class for all event-receiving entities in the event system.
+ *
+ * VaEntity provides a thread-safe event buffer and a virtual interface for handling events.
+ * Users should inherit from VaEntity and implement handleEvent() to define custom event logic.
+ *
+ * Typical usage:
+ *
+ * class MyEntity : public va::VaEntity {
+ * protected:
+ *     // Implement your own event handling logic here!
+ *     void handleEvent(std::shared_ptr<event::EventBase> event) override {
+ *         if (va::event::is_event<MyEvent>(*event)) {
+ *             auto* myEvt = va::event::getIf<MyEvent>(*event);
+ *             if (myEvt) {
+ *                 // Do something with myEvt
+ *             }
+ *         }
+ *     }
+ * };
+ *
+ * MyEntity entity;
+ * entity.eventPush(myEventPtr); // Pushes and immediately handles the event
+ * entity.processOneEvent();     // Optionally, process one event from the buffer
+ */
+class VaEntity
+{
+  protected:
+    // TODO need a lock-free queue
+    std::mutex mtx;  ///< Mutex for thread-safe access to the event buffer
+
+    // Store all events received by this entity (FIFO queue)
+    std::queue< std::shared_ptr< event::EventBase > > EventBuffer;
+
+    /*
+     * Handle a single event.
+     * Users should override this method in derived classes to implement custom event handling
+     * logic. This function is called by eventPush() and processOneEvent().
+     *
+     * event: The event to handle.
+     */
+    virtual void handleEvent( std::shared_ptr< event::EventBase > event ) = 0;
+
+    /*
+     * String label , used to check it while running
+     */
+    std::string label;
+
+  public:
+    /*
+     * Push an event into the buffer and 'handlevent' method will handle it.
+     * This function is thread-safe. The event is pushed into the buffer and handleEvent() is
+     * called.
+     *
+     * event: The event to push.
+     */
+    virtual void eventPush( std::shared_ptr< event::EventBase > event );
+
+    /*
+     * Process one event from the buffer (FIFO).
+     * If the buffer is not empty, pops and handles the front event.
+     * Useful for asynchronous or deferred event processing.
+     *  
+     *  return:
+     *      1: sucess  ( callback-function has been finished )
+     *      0: bad event
+     *     -1: empty buffer
+     */
+    virtual int processOneEvent();
+
+    /*
+     * List of Data Interface
+     */
+    std::string getLabel();
+    void        setLabel( std::string nameLabel ){this->label = nameLabel;};
+
+    virtual ~VaEntity() = default;
+};
+
+}  // namespace va
+
+#endif
+/*
+ * VaEvent.hpp
+ *
+ * This header provides a set of utilities and macros for defining and working with custom event
+ * types in a type-safe and extensible way. It is designed for use in event-driven systems, such as
+ * GUI frameworks or game engines.
+ *
+ * Features:
+ * - Unique type IDs for each event type at runtime.
+ * - Macros to simplify event type definition.
+ * - Type-safe utilities for event type checking and casting.
+ *
+ * Example usage:
+ *
+ * VA_EVENT_DEFINE(MouseEvent)
+ *     int x, y;
+ *     bool isClick;
+ * VA_EVENT_DEFINE_END
+ *
+ * MouseEvent oneevent{100, 100, 1};
+ *
+ * void handleEvent(const EventBase& e)
+ * {
+ *     if (is_event<MouseEvent>(e))
+ *     {
+ *         auto& mouse = static_cast<const MouseEvent&>(e);
+ *         std::cout << mouse.x << mouse.y;
+ *     }
+ * }
+ *
+ * Main components:
+ * - event_type_id<T>(): Returns a unique ID for each event type.
+ * - EVENT_BASE_METHOD(T): Implements the required id() method for the event.
+ * - VA_EVENT_DEFINE / VA_EVENT_DEFINE_END: Macros to define new event types.
+ * - is_event<T>(const EventBase&): Checks if an event is of type T.
+ * - getIf<T>(const EventBase&): Returns a pointer to the event if it is of type T, otherwise
+ * nullptr.
+ *
+ * All event types must inherit from va::event::EventBase (enforced by the macros).
+ * Thread-safe unique ID generation is ensured via std::atomic.
+ */
+
+#ifndef _VAEVENT_HPP_
+#define _VAEVENT_HPP_
+
+#include <atomic>
+#include <stdlib.h>
+
+// return a unique id number
+inline std::atomic< size_t >& global_id_counter()
+{
+    static std::atomic< size_t > counter{ 0 };
+    return counter;
+}
+
+// get the type id of a type
+template < typename T > size_t event_type_id()
+{
+    static size_t id = global_id_counter()++;
+    return id;
+}
+
+// must be included in new event's definition.
+#define EVENT_BASE_METHOD( T )       \
+    size_t id() const override       \
+    {                                \
+        return event_type_id< T >(); \
+    }
+
+// but you can also use this to simply define a event
+#define VA_EVENT_DEFINE( EventName )               \
+    struct EventName : public va::event::EventBase \
+    {                                              \
+        EVENT_BASE_METHOD( EventName );
+
+#define VA_EVENT_DEFINE_END \
+    }                       \
+    ;
+
+namespace va
+{
+namespace event
+{
+    struct EventBase
+    {
+        virtual ~EventBase()      = default;
+        virtual size_t id() const = 0;
+    };
+
+    template < typename T > constexpr bool is_event( const EventBase& e )
+    {
+        return e.id() == event_type_id< T >();
+    }
+
+    template < typename T > const T* getIf( const EventBase& e )
+    {
+        if ( is_event< T >( e ) )
+            {
+                return &static_cast< const T& >( e );
+            }
+        return nullptr;
+    }
+}
+}
+#endif
+#ifndef _VA_EVENTROUTER_HPP_
+#define _VA_EVENTROUTER_HPP_
+
+#include "VaEventUpstream.hpp"
+
+#include <memory>
+#include <queue>
+
+namespace va
+{
+
+/// Register, absorb, and dispatch events
+class VaEventRouter : public VaEventUpstream
+{
+  protected:
+    // Buffer for events from various sources
+    // Using smart pointers for memory safety
+    std::queue< std::shared_ptr< event::EventBase > > EventBuffer;
+
+  public:
+    // Push an event into the buffer
+    bool Push( std::shared_ptr< event::EventBase > event );
+
+    // Dispatch one event from the buffer
+    void DispatchOnce() override;
+    void thr_DispatchLoop() override;
+
+    VaEventRouter() : VaEventUpstream() {};
+
+    ~VaEventRouter()
+    {
+        eventloopStop();
+    }
+};
+
+}  // namespace va
+
+#endif
+#ifndef _VA_EVENTUPSTREAM_HPP_
+#define _VA_EVENTUPSTREAM_HPP_
+
+#include "VaEntity.hpp"
+
+#include <atomic>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+namespace va
+{
+
+/// for event dispatching
+class VaEventUpstream
+{
+  protected:
+    std::mutex              mtx,cv_mtx;
+    std::condition_variable cv;
+    std::atomic< bool >     running{ false };
+    std::thread             eventThread;
+
+    /*
+    Establish two indexes for registrants and events:
+    One using event indexing for efficient event distribution
+    One using entity indexing for efficient entity deregistration
+    */
+    // Store listeners indexed by event ID
+    std::vector< std::vector< std::weak_ptr< VaEntity > > > Listeners;
+    // For quick lookup of events registered by specific entities
+    std::unordered_map< std::shared_ptr< VaEntity >, std::vector< size_t > > Listeners2;
+
+  public:
+    // Register an entity to listen for a specific event
+    void Register( size_t event_id, std::shared_ptr< VaEntity > entity );
+
+    // Dispatch one event from the buffer
+    virtual void DispatchOnce() = 0;
+
+    // Event loop running in a separate thread
+    virtual void thr_DispatchLoop() = 0;
+
+    /*
+    Three different unregistration methods:
+    Unregister an entity and all its registered events
+    Unregister all entities from a specific event
+    Unregister a specific event from a specific entity
+    */
+    void UnRegister( std::shared_ptr< VaEntity > entity );
+    void UnRegister( size_t event_id );
+    void UnRegister( std::shared_ptr< VaEntity > entity, size_t event_id );
+
+    // Start/stop the dispatch loop thread
+    void eventloopStart();
+    void eventloopStop();
+
+    // Check if the event loop is running
+    bool IsRunning() const
+    {
+        return running;
+    }
+
+    VaEventUpstream()  = default;
+    ~VaEventUpstream() = default;
+};
+
+}  // namespace va
+
+#endif  // _VA_EVENTUPSTREAM_HPP_
+#ifndef _VA_INPUT_HPP
+#define _VA_INPUT_HPP
+
+#include "core/VaEventUpstream.hpp"
+
+VA_EVENT_DEFINE(VA_MOUSE_LEFT_CLICK)
+    float x,y;
+    int duration = -1; // time_t i
+
+
+namespace va
+{
+class VaInput
+{
+protected:
+
+    
+
+public:
+
+    // Start or Stop mouse loop 
+    void Start();
+    void Stop();
+
+};
+}
+
+#endif  //_VA_INPUT_HPP
+/*
+ * (C) Lc3124 2024 
+ * LICENSE (MIT)
+ * 这个文件用来实现VaTui::Color类
+ *
+ */
+
+#ifndef _VACOLOR_CPP_
+#define _VACOLOR_CPP_
+
+//Va
+#include "VaTui.hpp"
+// std
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <algorithm>
+// sys
+#include <unistd.h>
+
+/*
+ * 简单封装一些东西，没必要过多说明
+ */
+
+void VaTui::Color::fastOutput(const char *str) {
+    write(STDOUT_FILENO, str, strlen(str));
+}
+
+const char* VaTui::Color::_SetColor4bit(int front, int background)
+{
+    static char escapeCommand[64];
+    snprintf(escapeCommand, sizeof(escapeCommand), "\033[%dm\033[%dm", front, background);
+    return escapeCommand;
+}
+
+void VaTui::Color::SetColor4bit(int front, int background)
+{
+    //我不清楚静态成员怎么显式调用其他成员，都知道这个函数是VaTui::Color的就好,后面同理
+    fastOutput(_SetColor4bit(front, background));
+}
+
+const char* VaTui::Color::_SetColor256(int front, int background)
+{ 
+    static char escapecommand[64];
+    snprintf(escapecommand, sizeof(escapecommand),"\033[38;5;%dm\033[48;5;%dm",front,background);
+    return escapecommand;
+}
+
+void VaTui::Color::SetColor256(int front, int background)
+{
+    fastOutput(_SetColor256(front, background));
+}
+
+const char* VaTui::Color:: _set_background_color_RGB(int R,int B,int G)
+{
+    static char escapecommand[64];
+    snprintf(escapecommand, sizeof(escapecommand),"\033[48;2;%d,%d,%dm",R,G,B);
+    return escapecommand;
+}
+
+void VaTui::Color::set_background_color_RGB(int R, int B,int G)
+{
+    fastOutput(_set_background_color_RGB(R, B, G));
+}
+
+const char* VaTui::Color::_set_front_color_RGB(int R,int B,int G)
+{
+    static char escapecommand[64];
+    snprintf(escapecommand, sizeof(escapecommand),"\033[38;2;%d,%d,%dm",R,G,B);
+    return escapecommand;
+}
+
+void VaTui::Color::set_front_color_RGB(int R, int B,int G)
+{
+    fastOutput(_set_front_color_RGB(R, G, B));
+}
+
+const char* VaTui::Color::_SetEffect(short effect,bool isEnable)
+{
+    static char escapecommand[64];
+    if (isEnable == true){
+        snprintf(escapecommand,sizeof(escapecommand),"\033[%dm",effect);
+    }
+    else {
+        snprintf(escapecommand,sizeof(escapecommand),"\033[2%dm",effect);
+    }
+
+    return escapecommand;
+}
+
+void VaTui::Color::SetEffect(short effect,bool isEnable)
+{
+    fastOutput(_SetEffect(effect, isEnable));
+}
+
+void VaTui::Color::ColorEffectReset()
+{
+    fastOutput(_ColorEffectReset());
+}
+
+const char* VaTui::Color::_ColorEffectReset()
+{
+    static char escapecommand[64];
+    snprintf(escapecommand,sizeof(escapecommand),"\033[0m");
+    return escapecommand;
+}
+
+
+/*
+* 将给定的 RGB 颜色值（r、g、b，范围通常是0 - 255）转换为对应的 ANSI 256 色模式下的颜色代码,
+* 我无法保证在实际使用中的效果，后续会进行测试验证。
+* 首先计算颜色的灰度值，然后根据颜色是否为灰度（即 r、g、b 相等）以及灰度值范围，
+* 然后来确定对应的 ANSI 256 色代码，返回该代码值。
+*
+* PS:
+* 有几个函数不是我自己写的，所以不确定他们可不可以正常工作
+* 但我会测试它们的
+*/
+
+
+/*
+ * 预期范围内似乎没有问题，但是没有检查输入
+ */
+int VaTui::Color::RgbToAnsi256Color( int r,int g,int b )
+{
+    int gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (r == g && g == b) {
+        if (gray < 8) return 16;
+        if (gray > 248) return 231;
+        return std::round((gray - 8) / 247.0 * 24) + 232;
+    } else {
+        int ansiR = std::round((double)r / 51.0);
+        int ansiG = std::round((double)g / 51.0);
+        int ansiB = std::round((double)b / 51.0);
+        return 16 + (ansiR * 36) + (ansiG * 6) + ansiB;
+    }
+}
+
+/*这个函数不是我写的，我也不知道这玩意能不能正常工作，我会测试它的*/
+//将Ansi的256色转换成RGB颜色的三个分量( r , g , b ) 
+void VaTui::Color::Ansi256ColorToRGB(int ansi256Color, int& r, int& g, int& b)
+{
+    if (ansi256Color >= 0 && ansi256Color <= 15) {
+        // 处理前16个基本颜色（0 - 15），对应特定的固定RGB值
+        switch (ansi256Color) {
+            case 0:  // 黑色
+                r = 0;
+                g = 0;
+                b = 0;
+                break;
+            case 1:  // 红色
+                r = 170;
+                g = 0;
+                b = 0;
+                break;
+            case 2:  // 绿色
+                r = 0;
+                g = 170;
+                b = 0;
+                break;
+            case 3:  // 黄色
+                r = 170;
+                g = 170;
+                b = 0;
+                break;
+            case 4:  // 蓝色
+                r = 0;
+                g = 0;
+                b = 170;
+                break;
+            case 5:  // 紫色
+                r = 170;
+                g = 0;
+                b = 170;
+                break;
+            case 6:  // 深绿色（青色）
+                r = 0;
+                g = 170;
+                b = 170;
+                break;
+            case 7:  // 白色
+                r = 170;
+                g = 170;
+                b = 170;
+                break;
+            case 8:  // 亮黑色（灰色）
+                r = 85;
+                g = 85;
+                b = 85;
+                break;
+            case 9:  // 亮红色
+                r = 255;
+                g = 85;
+                b = 85;
+                break;
+            case 10:  // 亮绿色
+                r = 85;
+                g = 255;
+                b = 85;
+                break;
+            case 11:  // 亮黄色
+                r = 255;
+                g = 255;
+                b = 85;
+                break;
+            case 12:  // 亮蓝色
+                r = 85;
+                g = 85;
+                b = 255;
+                break;
+            case 13:  // 亮紫色
+                r = 255;
+                g = 85;
+                b = 255;
+                break;
+            case 14:  // 亮深绿色（亮青色）
+                r = 85;
+                g = 255;
+                b = 255;
+                break;
+            case 15:  // 亮白色
+                r = 255;
+                g = 255;
+                b = 255;
+                break;
+        }
+    } else if (ansi256Color >= 16 && ansi256Color <= 231) {
+        // 处理 16 - 231 的颜色，通过特定算法从颜色代码计算RGB分量
+        int index = ansi256Color - 16;
+        r = (index / 36) * 51;
+        index %= 36;
+        g = (index / 6) * 51;
+        b = (index % 6) * 51;
+    } else if (ansi256Color >= 232 && ansi256Color <= 255) {
+        // 处理 232 - 255 的灰度颜色，根据代码计算灰度对应的RGB值
+        int gray = 8 + (ansi256Color - 232) * 10;
+        r = gray;
+        g = gray;
+        b = gray;
+    }
+} 
+
+//混合两个Ansi256色，返回混合的结果
+int VaTui::Color::MixAnsi256Colors( int color1,int color2 )
+{
+    int r1, g1, b1, r2, g2, b2;
+    if (color1 >= 16 && color1 <= 231) {
+        int index = color1 - 16;
+        r1 = index / 36;
+        index %= 36;
+        g1 = index / 6;
+        b1 = index % 6;
+        r1 *= 51;
+        g1 *= 51;
+        b1 *= 51;
+    } else if (color1 >= 232 && color1 <= 255) {
+        int gray = ((color1 - 232) * 247 / 24) + 8;
+        r1 = g1 = b1 = gray;
+    }
+
+    if (color2 >= 16 && color2 <= 231) {
+        int index = color2 - 16;
+        r2 = index / 36;
+        index %= 36;
+        g2 = index / 6;
+        b2 = index % 6;
+        r2 *= 51;
+        g2 *= 51;
+        b2 *= 51;
+    } else if (color2 >= 232 && color2 <= 255) {
+        int gray = ((color2 - 232) * 247 / 24) + 8;
+        r2 = g2 = b2 = gray;
+    }
+
+    int r = (r1 + r2) / 2;
+    int g = (g1 + g2) / 2;
+    int b = (b1 + b2) / 2;
+
+    return RgbToAnsi256Color(r, g, b);
+}
+
+//将Ansi256色色号反色处理，返回反色结果
+int VaTui::Color::AntiAnsi256Color(int colorcode)
+{
+    int color1 =colorcode;
+    int r1, g1, b1;
+    if (color1 >= 16 && color1 <= 231) {
+        int index = color1 - 16;
+        r1 = index / 36;
+        index %= 36;
+        g1 = index / 6;
+        b1 = index % 6;
+        r1 *= 51;
+        g1 *= 51;
+        b1 *= 51;
+    } else if (color1 >= 232 && color1 <= 255) {
+        int gray = ((color1 - 232) * 247 / 24) + 8;
+        r1 = g1 = b1 = gray;
+    }
+    int r = 250 - r1;
+    int g = 250 - g1;
+    int b = 250 - b1;
+
+    return RgbToAnsi256Color(r, g, b);
+}
+
+/*
+ * 下面这一段不是我写的，是deepseek生成的代码，
+ * 我会测试他们的
+ */
+// 将 ANSI 16 色转换为 ANSI 256 色的函数
+int VaTui::Color::Ansi16ColorToAnsi256(int ansi16Color)
+{
+    if (ansi16Color >= 0 && ansi16Color <= 7) {
+        return ansi16Color + 16;  // 前8个基本颜色对应到 256 色中的前16个颜色里，索引偏移16
+    } else if (ansi16Color >= 8 && ansi16Color <= 15) {
+        return ansi16Color + 232 - 8;  // 后8个亮色对应到 256 色中的特定范围，进行相应索引转换
+    }
+    return 0;  // 如果传入的 16 色代码不符合规范，返回默认值（这里返回0，可根据实际情况调整）
+}
+
+// 将 ANSI 256 色转换为 ANSI 16 色的函数
+int VaTui::Color::Ansi256ColorToAnsi16(int ansi256Color)
+{
+    if (ansi256Color >= 16 && ansi256Color <= 231) {
+        // 256 色中的前 216 种颜色转换到 16 色中的前 8 种基本色的逻辑
+        int index = ansi256Color - 16;
+        int r = index / 36;
+        index %= 36;
+        int g = index / 6;
+        int b = index % 6;
+        if (r == g && g == b) {
+            return r;
+        }
+        return 8;  // 如果不是单一颜色，对应到 16 色中的亮黑色（这里简单对应，可根据需求调整更合适的逻辑）
+    } else if (ansi256Color >= 232 && ansi256Color <= 255) {
+        // 256 色中的灰度范围颜色对应到 16 色中的后 8 种亮色的逻辑
+        return (ansi256Color - 232 + 8);
+    }
+    return 0;  // 如果传入的 256 色代码不符合规范，返回默认值（这里返回0，可根据实际情况调整）
+}
+
+
+int VaTui::Color::Ansi256ColorToAnsi4bit(int ansi256Color, bool isFrontOrBack) {
+    if (ansi256Color < 16) {
+        // 如果已经是4bit颜色，直接返回
+        return ansi256Color;
+    }
+
+    if (ansi256Color >= 232) {
+        // 处理灰度颜色
+        int gray = ansi256Color - 232;
+        if (gray < 4) return isFrontOrBack ? 30 : 40; // 黑色
+        if (gray < 8) return isFrontOrBack ? 90 : 100; // 亮黑色
+        if (gray < 12) return isFrontOrBack ? 37 : 47; // 白色
+        return isFrontOrBack ? 97 : 107; // 亮白色
+    }
+
+    // 处理彩色
+    int colorIndex = ansi256Color - 16;
+    int r = (colorIndex / 36) % 6;
+    int g = (colorIndex / 6) % 6;
+    int b = colorIndex % 6;
+
+    // 将6级颜色映射到4级颜色
+    r = r < 3 ? 0 : 1;
+    g = g < 3 ? 0 : 1;
+    b = b < 3 ? 0 : 1;
+
+    int ansi4bitColor = (r << 2) | (g << 1) | b;
+
+    // 映射到4bit颜色
+    static const int ansi4bitMap[] = {
+        0, 4, 2, 6, 1, 5, 3, 7
+    };
+
+    int result = ansi4bitMap[ansi4bitColor];
+
+    // 如果是前景色，返回前景色代码，否则返回背景色代码
+    return isFrontOrBack ? result + 30 : result + 40;
+}
+
+int VaTui::Color::Ansi4bitColorToAnsi16(int ansi4bitColor) {
+    // 4bit颜色直接映射到16色
+    if (ansi4bitColor < 8) {
+        return ansi4bitColor;
+    } else {
+        return ansi4bitColor + 8;
+    }
+}
+#endif 
+
+/*
+ * (c) 2024 Lc3124 
+ * License (MIT)
+ *
+ * 本代码片段主要实现了与终端光标操作相关的一系列功能，
+ * 包括将光标移动到指定位置、按指定方向和距离移动光标、
+ * 重置光标到默认位置、隐藏和显示光标等操作，
+ * 旨在方便在终端应用开发中对光标进行灵活控制，以实现更丰富的用户界面交互效果。
+ */
+
+#ifndef _VACUSOR_CPP_
+#define _VACUSOR_CPP_
+
+//Va
+#include "VaTuiEnums.hpp"
+#include "VaTui.hpp"
+// std
+#include <cstdio>
+#include <cstring>
+// sys
+#include <unistd.h>
+
+
+void VaTui::Cursor::fastOutput(const char *str) {
+    write(STDOUT_FILENO, str, strlen(str));
+}
+const char* VaTui::Cursor::_CursorMoveTo(int h, int w)
+{
+    static char escapeCommand[64];
+    snprintf(escapeCommand, sizeof(escapeCommand), "\033[%d;%dH", h, w);
+    return escapeCommand;
+}
+void VaTui::Cursor::CursorMoveTo(int h, int w)
+{
+    fastOutput(_CursorMoveTo(h, w));
+}
+const char* VaTui::Cursor::_CursorMove(int dr, int ds)
+{
+    static char escapeCommand[64];
+    switch (dr)
+    {
+        case CUR_LEFT:
+            {
+                // 生成向左移动指定距离（ds）的 ANSI 转义序列字符串，格式为 "\033[%dD"，其中 %d 会被实际移动距离替换。
+                snprintf(escapeCommand, sizeof(escapeCommand), "\033[%dD", ds);
+                return escapeCommand;
+            }
+        case CUR_RIGHT:
+            {
+                // 生成向右移动指定距离（ds）的 ANSI 转义序列字符串，格式为 "\033[%dC"。
+                snprintf(escapeCommand, sizeof(escapeCommand), "\033[%dC", ds);
+                return escapeCommand;
+            }
+        case CUR_UP:
+            {
+                // 生成向上移动指定距离（ds）的 ANSI 转义序列字符串，格式为 "\033[%dA"。
+                snprintf(escapeCommand, sizeof(escapeCommand), "\033[%dA", ds);
+                return escapeCommand;
+            }
+        case CUR_DOWN:
+            {
+                // 生成向下移动指定距离（ds）的 ANSI 转义序列字符串，格式为 "\033[%dB"。
+                snprintf(escapeCommand, sizeof(escapeCommand), "\033[%dB", ds);
+                return escapeCommand;
+            }
+        default:
+            // 如果传入的移动方向枚举值不合法（不在预定义的方向枚举范围内），则返回 nullptr，表示无法生成有效的移动转义序列。
+            return nullptr;
+    }
+}
+void VaTui::Cursor::CursorMove(int dr, int ds)
+{
+    fastOutput(_CursorMove(dr, ds));
+}
+
+const char*VaTui::Cursor:: _CursorReset()
+{
+    return "\033[H";
+}
+void VaTui::Cursor::CursorReset()
+{
+    fastOutput("\033[H");
+}
+
+const char* VaTui::Cursor::_CursorHide()
+{
+    return "\033[?25l";
+}
+// 通过调用 fastOutput 函数输出由 _CursorHide 提供的 ANSI 转义序列，从而在终端上实际隐藏光标。
+void VaTui::Cursor::CursorHide()
+{
+    fastOutput("\033[?25l");
+}
+
+// Show the cursor.
+// 返回用于显示光标的 ANSI 转义序列字符串，其固定为 "\033[?25h"，直接返回此字符串指针，供后续输出操作来实现显示光标功能，可在之前隐藏光标的场景结束后，重新显示光标以便正常交互操作。
+const char* VaTui::Cursor::_CursorShow()
+{
+    return "\033[?25h";
+}
+// 通过调用 fastOutput 函数输出由 _CursorShow 提供的 ANSI 转义序列，从而在终端上实际显示光标。
+void VaTui::Cursor::CursorShow()
+{
+    fastOutput("\033[?25h");
+}
+
+#endif
+/*
+ * (c) 2025 Lc3124 
+ * License (MIT)
+ * VaTui::System的实现 
+ */
+
+#ifndef _VASYSTEM_CPP_
+#define _VASYSTEM_CPP_
+
+//Va
+#include "VaTui.hpp"
+//std
+#include <iostream>
+#include <ctime>
+#include <cstdlib>
+//unix
+#include <unistd.h>
+#include <sys/utsname.h>
+#include <pwd.h>
+
+std::string VaTui::System::getUserName() {
+    uid_t uid = getuid();
+    struct passwd *pw = getpwuid(uid);
+    if (pw!= nullptr) {
+        return std::string(pw->pw_name);
+    }
+    return "";
+
+}
+
+// 获取当前时间
+std::string VaTui::System::getCurrentTime() {
+    time_t now = time(nullptr);
+    char buffer[80];
+    struct tm *timeinfo = localtime(&now);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+    return std::string(buffer);
+
+}
+
+//获取环境变量
+std::string VaTui::System::getRunningEnvironment(const char *index) {
+    const char *env = std::getenv(index);
+    std::string result = "";
+    if (env!= nullptr) {
+        result += env;
+    }
+    return result;
+
+}
+
+// 获取设备名称（这里通过utsname结构体获取系统信息中的机器名部分来近似表示设备名称）
+std::string VaTui::System::getDeviceName() {
+    struct utsname uts;
+    if (uname(&uts)!= -1) {
+        return std::string(uts.machine);
+    }
+    return "";
+
+}
+
+// 获取主机名
+std::string VaTui::System::getHostName() {
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname))!= -1) {
+        return std::string(hostname);
+    }
+    return "";
+}
+
+// 获取运行目录
+std::string VaTui::System::getRunningDirectory() {
+    char buffer[256];
+    if (getcwd(buffer, sizeof(buffer))!= nullptr) {
+        return std::string(buffer);
+    }
+    return "";
+
+}
+
+std::string VaTui::System::getSystemOuput(const char * cmd) {
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) {
+        std::cerr << "popen failed!" << std::endl;
+        return "";
+    }
+
+    char buffer[128];
+    std::string result = "";
+    while (!feof(pipe)) {
+        if (fgets(buffer, 128, pipe)!= nullptr) {
+            result += buffer;
+        }
+    }
+
+    pclose(pipe);
+
+    return result;
+}
+#endif
+#include "VaTui.hpp"
+
+// std
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+#include <stdexcept>
+// sys
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
+
+// 全局变量，保存原始终端属性和当前终端属性
+termios originalAttrs;
+termios currentAttrs;
+
+// 辅助函数，用于安全地设置终端属性，添加异常处理机制
+void
+    VaTui::Term::setTerminalAttrsSafely ( const termios &newAttrs )
+{
+    if ( tcsetattr ( STDIN_FILENO, TCSANOW, &newAttrs ) != 0 )
+        {
+            throw std::runtime_error ( "Failed to set terminal attributes." );
+        }
+    currentAttrs = newAttrs;
+}
+
+// 辅助函数，用于安全地获取终端属性，添加异常处理机制
+void
+    VaTui::Term::getTerminalAttrsSafely ()
+{
+    if ( tcgetattr ( STDIN_FILENO, &currentAttrs ) != 0 )
+        {
+            throw std::runtime_error ( "Failed to get terminal attributes." );
+        }
+}
+
+// 保存终端原始设置
+void
+    VaTui::Term::SaveTerm ()
+{
+    getTerminalAttrsSafely ();
+    originalAttrs = currentAttrs;
+}
+
+// 恢复终端原始设置
+void
+    VaTui::Term::RestoreTerm ()
+{
+    setTerminalAttrsSafely ( originalAttrs );
+    // system("reset");
+}
+
+// 清空整个屏幕
+const char *
+    VaTui::Term::_Clear ()
+{
+    return "\033[2J";
+}
+void
+    VaTui::Term::Clear ()
+{
+    fastOutput ( "\033[2J" );
+}
+
+// 清空从光标位置到行尾的区域
+const char *
+    VaTui::Term::_ClearLine ()
+{
+    return "\033[K";
+}
+void
+    VaTui::Term::ClearLine ()
+{
+    fastOutput ( "\033[K" );
+}
+
+// 获取终端属性
+void
+    VaTui::Term::getTerminalAttributes ()
+{
+    getTerminalAttrsSafely ();
+}
+
+// 设置终端属性
+void
+    VaTui::Term::setTerminalAttributes ( const termios &newAttrs )
+{
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 启用终端回显
+void
+    VaTui::Term::enableEcho ()
+{
+    termios newAttrs = currentAttrs;
+    newAttrs.c_lflag |= ECHO;
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 禁用终端回显
+void
+    VaTui::Term::disableEcho ()
+{
+    termios newAttrs = currentAttrs;
+    newAttrs.c_lflag &= ~ECHO;
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 启用控制台缓冲
+void
+    VaTui::Term::enableConsoleBuffering ()
+{
+    int flags = fcntl ( STDIN_FILENO, F_GETFL );
+    fcntl ( STDIN_FILENO, F_SETFL, flags & ~O_SYNC );
+}
+
+// 禁用控制台缓冲
+void
+    VaTui::Term::disableConsoleBuffering ()
+{
+    int flags = fcntl ( STDIN_FILENO, F_GETFL );
+    fcntl ( STDIN_FILENO, F_SETFL, flags | O_SYNC );
+}
+
+// 获取终端大小
+void
+    VaTui::Term::getTerminalSize ( int &rows, int &cols )
+{
+    struct winsize w;
+    if ( ioctl ( STDOUT_FILENO, TIOCGWINSZ, &w ) == 0 )
+        {
+            rows = w.ws_row;
+            cols = w.ws_col;
+        }
+    else
+        {
+            throw std::runtime_error ( "Failed to get terminal size." );
+        }
+}
+
+// 设置光标位置
+void
+    VaTui::Term::setCursorPosition ( int row, int col )
+{
+    std::cout << "\033[" << row << ";" << col << "H";
+    std::cout.flush (); // 手动刷新输出缓冲区，确保光标位置及时更新显示
+}
+
+// 保存光标位置
+void
+    VaTui::Term::saveCursorPosition ()
+{
+    std::cout << "\033[s";
+    std::cout.flush (); // 刷新输出缓冲区，保证保存操作生效
+}
+
+// 恢复光标位置
+void
+    VaTui::Term::restoreCursorPosition ()
+{
+    std::cout << "\033[u";
+    std::cout.flush (); // 刷新输出缓冲区，保证恢复操作生效
+}
+
+// 快速输出内容到终端
+void
+    VaTui::Term::fastOutput ( const char *str )
+{
+    write ( STDOUT_FILENO, str, strlen ( str ) );
+}
+
+// 非缓冲获取按键，改进以避免影响标准输出刷新
+char
+    VaTui::Term::nonBufferedGetKey ()
+{
+    char           buf = 0;
+    struct termios old = { 0 };
+    if ( tcgetattr ( 0, &old ) < 0 ) perror ( "tcgetattr()" );
+    old.c_lflag &= ~ICANON; // 非规范模式
+    old.c_cc[ VMIN ]  = 1;  // 最少读取一个字符
+    old.c_cc[ VTIME ] = 0;  // 无超时
+    if ( tcsetattr ( 0, TCSANOW, &old ) < 0 ) perror ( "tcsetattr()" );
+    if ( read ( 0, &buf, 1 ) < 0 ) perror ( "read" );
+    // 恢复原始终端属性
+    if ( tcsetattr ( 0, TCSANOW, &old ) < 0 ) perror ( "tcsetattr()" );
+    return (int) buf;
+}
+
+// 获取终端类型
+const char *
+    VaTui::Term::getTerminalType ()
+{
+    return std::getenv ( "TERM" );
+}
+
+// 设置行缓冲模式
+void
+    VaTui::Term::setLineBuffering ( bool enable )
+{
+    termios newAttrs = currentAttrs;
+    if ( enable )
+        {
+            newAttrs.c_lflag |= ICANON;
+        }
+    else
+        {
+            newAttrs.c_lflag &= ~ICANON;
+        }
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 获取一个字符，类似getch，改进以确保回显正确处理
+char
+    VaTui::Term::getCharacter ()
+{
+    disableEcho ();
+    char c = nonBufferedGetKey ();
+    enableEcho ();
+    return c;
+}
+
+// 判断终端是否支持某一功能
+bool
+    VaTui::Term::isTerminalFeatureSupported ( const char *feature )
+{
+    const char *termType = getTerminalType ();
+    if ( termType == nullptr )
+        {
+            return false;
+        }
+    return ( strstr ( termType, feature ) != nullptr );
+}
+
+// 设置字符输入延迟
+void
+    VaTui::Term::setCharacterDelay ( int milliseconds )
+{
+    termios newAttrs       = currentAttrs;
+    newAttrs.c_cc[ VMIN ]  = 0;
+    newAttrs.c_cc[ VTIME ] = milliseconds / 100;
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 获取输入速度
+int
+    VaTui::Term::getInputSpeed ()
+{
+    getTerminalAttrsSafely ();
+    return cfgetospeed ( &currentAttrs );
+}
+
+// 设置输入速度
+void
+    VaTui::Term::setInputSpeed ( int speed )
+{
+    termios newAttrs = currentAttrs;
+    cfsetospeed ( &newAttrs, static_cast<speed_t> ( speed ) );
+    cfsetispeed ( &newAttrs, static_cast<speed_t> ( speed ) );
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 设置输出速度
+void
+    VaTui::Term::setOutputSpeed ( int speed )
+{
+    termios newAttrs = currentAttrs;
+    cfsetospeed ( &newAttrs, static_cast<speed_t> ( speed ) );
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+// 检测是否有按键按下
+int
+    VaTui::Term::getkeyPressed ( char &k )
+{
+    struct termios oldt, newt;
+    int            oldf;
+    getTerminalAttrsSafely ();
+    oldt = currentAttrs;
+    newt = oldt;
+    newt.c_lflag &= ~( ICANON | ECHO );
+    oldf = fcntl ( STDIN_FILENO, F_GETFL );
+    fcntl ( STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK );
+    setTerminalAttrsSafely ( newt );
+
+    char c;
+    int  res = read ( STDIN_FILENO, &c, 1 );
+    if ( res > 0 )
+        {
+            k = c;
+            setTerminalAttrsSafely ( oldt );
+            fcntl ( STDIN_FILENO, F_SETFL, oldf );
+            return 1;
+        }
+    else
+        {
+            setTerminalAttrsSafely ( oldt );
+            fcntl ( STDIN_FILENO, F_SETFL, oldf );
+            k = static_cast<char> ( -1 );
+            return -1;
+        }
+}
+
+// 设置光标形状
+void
+    VaTui::Term::setCursorShape ( CursorShape shape )
+{
+    termios newAttrs = currentAttrs;
+    switch ( shape )
+        {
+        case CURSOR_BLOCK:
+            newAttrs.c_cflag &= ~( ECHOCTL );
+            break;
+        case CURSOR_UNDERLINE:
+            newAttrs.c_cflag |= ( ECHOCTL | ECHOE );
+            break;
+        case CURSOR_VERTICAL_BAR:
+            newAttrs.c_cflag |= ECHOCTL;
+            break;
+        }
+    setTerminalAttrsSafely ( newAttrs );
+}
+
+#include <iostream>
+void
+    VaTui::Term::FlushStdOut ()
+{
+    std::cout << fflush ( stdout );
+}
+/*
+ * (c) 2025 Lc3124
+ * License (MIT)
+ * VaTui::Utf的实现
+ */
+
+#ifndef _VAUTF_CPP_
+#define _VAUTF_CPP_
+
+#include "VaTui.hpp"
+
+
+//get the width of a UTF character 
+size_t VaTui::Utf::getUtf8CharWidth(const char* s) {
+    if (!s ||!*s) return 0;
+    unsigned char c = static_cast<unsigned char>(*s);
+    if (c < 0x80) return 1;
+    else if ((c & 0xE0) == 0xC0) return 2;
+    else if ((c & 0xF0) == 0xE0) return 3;
+    else if ((c & 0xF8) == 0xF0) return 4;
+    else return 0;
+
+}
+
+// recognize a ASCII character 
+bool VaTui::Utf::isAscii(char c) {
+    return (c & 0x80) == 0;
+
+}
+
+// 判断是否为 UTF-8 多字节序列的开头字节
+bool VaTui::Utf::isUtf8StartByte(char c) {
+    // 将 char 类型转换为 unsigned char 类型，避免符号位影响按位与操作
+    unsigned char uc = static_cast<unsigned char>(c);
+    // UTF-8 多字节序列的后续字节以 10 开头，所以只要不是以 10 开头就是开头字节
+    return (uc & 0xC0) != 0x80;
+}
+
+
+// 判断是否为 UTF-8 编码字符
+bool VaTui::Utf::isUtf8Char(const char* bytes, int len) {
+    if (len <= 0) return false;
+    char firstByte = bytes[0];
+    if (isAscii(firstByte)) return true;
+    if (isUtf8StartByte(firstByte)) {
+        int numBytes;
+        if ((firstByte & 0xE0) == 0xC0) numBytes = 2;
+        else if ((firstByte & 0xF0) == 0xE0) numBytes = 3;
+        else if ((firstByte & 0xF8) == 0xF0) numBytes = 4;
+        else return false;
+        return len == numBytes;
+
+    }
+    return false;
+
+}
+
+// 判断是否为 GBK 编码字符  
+bool VaTui::Utf::isGbkChar(const char* bytes, int len) {
+    if (len!= 2) return false;
+    unsigned char firstByte = static_cast<unsigned char>(bytes[0]);
+    unsigned char secondByte = static_cast<unsigned char>(bytes[1]);
+    return ((firstByte >= 0x81 && firstByte <= 0xFE) && (secondByte >= 0x40 && secondByte <= 0xFE && secondByte!= 0x7F));
+
+}
+
+int VaTui::Utf::getUtf8ByteCount(char c) {
+    unsigned char uc = static_cast<unsigned char>(c);
+    if ((uc & 0x80) == 0) {
+        // 单字节字符 (0xxxxxxx)
+        return 1;
+    } else if ((uc & 0xE0) == 0xC0) {
+        // 双字节字符 (110xxxxx)
+        return 2;
+    } else if ((uc & 0xF0) == 0xE0) {
+        // 三字节字符 (1110xxxx)
+        return 3;
+    } else if ((uc & 0xF8) == 0xF0) {
+        // 四字节字符 (11110xxx)
+        return 4;
+    }
+    // 无效的 UTF-8 起始字节
+    return -1; 
+}
+
+// 懒得写注释了，这段代码没有问题
+bool VaTui::Utf::getUtf8CharaInString( std::string resource , std::string &save , int index )
+{
+    save = "";
+    int i = 0;
+    // NOTICE! 这里utf_cnt 从-1开始，但实际上index是从0开始索引的，这是个魔法数字 
+    int utf_cnt = -1; 
+    while (i < resource.size())
+    {
+        if (VaTui::Utf::isUtf8StartByte(resource[i]))
+        {
+            utf_cnt++;
+            if (utf_cnt == index)
+            {
+                int byteCount = VaTui::Utf::getUtf8ByteCount(resource[i]);
+                if (i + byteCount > resource.size()) {
+                    return false;
+                }
+                for (int j = 0; j < byteCount; j++)
+                {
+                    save.push_back(resource[i + j]);
+                }
+                return true;
+            }
+            i += VaTui::Utf::getUtf8ByteCount(resource[i]);
+        }
+        else
+        {
+            i++;
+        }
+    }
+    return false;
+}
+
+int VaTui::Utf::getUtf8StringLen( std::string resource )
+{
+    int i=0 , cnt=0 ;
+    while( resource.size() != i )
+    {
+        if(VaTui::Utf::isUtf8StartByte(resource.at(i)))
+        {
+            cnt ++ ;
+        }
+        i++;
+    }
+    return cnt;
+}
+
+
+#endif
