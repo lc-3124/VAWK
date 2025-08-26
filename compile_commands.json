@@ -1,6 +1,6 @@
 [
  {
-  "directory": "/data/data/com.termux/files/home/clonework/VAUI",
+  "directory": "/workspaces/VAWK",
   "arguments": [
    "g++",
    "--std=c++23",
@@ -22,41 +22,5 @@
    "build/obj/VaEntity.o"
   ],
   "file": "src/VaEntity.cpp"
- },
- {
-  "directory": "/data/data/com.termux/files/home/clonework/VAUI",
-  "arguments": [
-   "g++",
-   "--std=c++23",
-   "-Wall",
-   "-Wextra",
-   "-g",
-   "-fPIC",
-   "-I.",
-   "-Iinc/",
-   "-c",
-   "src/VaEventRouter.cpp",
-   "-o",
-   "build/obj/VaEventRouter.o"
-  ],
-  "file": "src/VaEventRouter.cpp"
- },
- {
-  "directory": "/data/data/com.termux/files/home/clonework/VAUI",
-  "arguments": [
-   "g++",
-   "--std=c++23",
-   "-Wall",
-   "-Wextra",
-   "-g",
-   "-fPIC",
-   "-I.",
-   "-Iinc/",
-   "-c",
-   "src/VaEventUpstream.cpp",
-   "-o",
-   "build/obj/VaEventUpstream.o"
-  ],
-  "file": "src/VaEventUpstream.cpp"
  }
 ]

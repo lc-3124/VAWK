@@ -5,9 +5,14 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <string>
+#include <vector>
 
 namespace va
 {
+
+// Pre-declare VaEventUpstream
+class VaEventUpstream;
 
 /*
  * The base class for all event-receiving entities in the event system.
@@ -34,15 +39,20 @@ namespace va
  * entity.eventPush(myEventPtr); // Pushes and immediately handles the event
  * entity.processOneEvent();     // Optionally, process one event from the buffer
  */
-class VaEntity
+class VaEntity :  public std::enable_shared_from_this<VaEntity>
 {
   protected:
     // TODO need a lock-free queue
-    std::mutex mtx;  ///< Mutex for thread-safe access to the event buffer
+    std::mutex mtx , upstream_entity_mtx;  ///< Mutex for thread-safe access to the event buffer
 
     // Store all events received by this entity (FIFO queue)
     std::queue< std::shared_ptr< event::EventBase > > EventBuffer;
 
+    // Store indexes of upstreams and downEntitys, they are used to mark
+    // where the Entity subscribes events from and what sub-Entities it contains.
+    std::vector< std::shared_ptr< VaEventUpstream > > Upstreams;
+    std::vector< std::shared_ptr< VaEntity > >       downEntitys;
+    
     /*
      * Handle a single event.
      * Users should override this method in derived classes to implement custom event handling
@@ -57,7 +67,24 @@ class VaEntity
      */
     std::string label;
 
+    /**/
+
   public:
+
+    /*
+     * Safely subscribe to an upstream event source.
+     * This function registers the entity with the specified VaEventUpstream to receive events.
+     * You must use this mothod to subscribe to events instead of using one in `VaUpstream`
+     */
+    void subscribe( std::shared_ptr< VaEventUpstream > upstream , std::vector< size_t > event_ids );
+    /*
+     * Safely unsubscribe from an upstream event source.
+     * This function unregisters the entity from the specified VaEventUpstream, stopping it from
+     * receiving further events.
+     */
+    void unsubscribe( std::shared_ptr< VaEventUpstream > upstream , std::vector< size_t > event_ids );
+    void unsubscribe( std::shared_ptr< VaEventUpstream > upstream );
+    
     /*
      * Push an event into the buffer and 'handlevent' method will handle it.
      * This function is thread-safe. The event is pushed into the buffer and handleEvent() is
@@ -79,15 +106,23 @@ class VaEntity
      */
     virtual int processOneEvent();
 
-    /*
+    /* 
      * List of Data Interface
      */
     std::string getLabel();
     void        setLabel( std::string nameLabel ){this->label = nameLabel;};
 
-    virtual ~VaEntity() = default;
+    /*
+     * Destructor, used to clean up the event registration and 
+     * clean other resources.
+     */
+    void Raii();
+    virtual ~VaEntity()
+    {
+      Raii();
+    };
 };
 
-}  // namespace va
+};  // namespace va
 
 #endif
