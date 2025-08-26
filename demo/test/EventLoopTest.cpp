@@ -80,7 +80,7 @@ class EntityA : public EntityDemo
                 <<"Instance pointer: "<<(unsigned long )this
                 <<"\nReceived event with type ID: "
                 <<  event->id() 
-                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
+                <<"\nAnd ins label: "<<analyzeEventLabel(event)<<std::endl;
         };
 };
 
@@ -93,7 +93,7 @@ class EntityB : public EntityDemo
                 <<"Instance pointer: "<<(unsigned long )this
                 <<"\nReceived event with type ID: "
                 <<  event->id()
-                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
+                <<"\nAnd ins label: "<<analyzeEventLabel(event)<<std::endl;
         };
 };
 
@@ -106,7 +106,7 @@ class EntityC : public  EntityDemo
                 <<"Instance pointer: "<<(unsigned long )this
                 <<"\nReceived event with type ID: "
                 <<  event->id() 
-                <<"\nAnd ins label:"<<analyzeEventLabel(event)<<std::endl;
+                <<"\nAnd ins label: "<<analyzeEventLabel(event)<<std::endl;
         };
 };
 
