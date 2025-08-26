@@ -1,17 +1,16 @@
-# VAGUI  :  Static lib(libVAGUI.a) and Shared lib(libVAGUI.so)
+# VAGUI  :  Static lib(libVAGUI.a) , Shared lib(libVAGUI.so) and demostration
 
 # lc3124@aliyun.com
 
-# You should run this Makefile in console 
+# You should run this Makefile in a posix-shell
 # Before load this Makfile , Please ensure:
-# 1. g++(c++23) , sfml(ver >= 3.0) has been correctly installed 
-# 	in your system
+# 1. g++(c++23) 
 # 2. g++ , binutils , make . can be drectly called in your terminal
 # 3. your terminal support colorful (ANSI 8bit) output ,and unicode 
 # 	(if doesn't , it don't mean that compiling will be failed  , however 
-# 	it may makes your compiling logs look like a shit.)
-# 4. There is a bash script in program root "outInfo", don't 
-# 	touch it!
+# 	it may makes your compiling outputs look like a shit.)
+# 4. There is a bash script in program root "outInfo", 
+# used to output compiling information don't touch it!
 
 
 # Basic configuration
