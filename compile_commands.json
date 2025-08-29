@@ -1,6 +1,6 @@
 [
  {
-  "directory": "/workspaces/VAWK",
+  "directory": "/home/lc3124/clonework/VAUI",
   "arguments": [
    "g++",
    "--std=c++23",
@@ -15,12 +15,12 @@
    "-MMD",
    "-MP",
    "-MF",
-   "build/dep/VaEntity.d",
+   "build/dep/enable_entity_shared_from_this.d",
    "-c",
-   "src/VaEntity.cpp",
+   "src/enable_entity_shared_from_this.cpp",
    "-o",
-   "build/obj/VaEntity.o"
+   "build/obj/enable_entity_shared_from_this.o"
   ],
-  "file": "src/VaEntity.cpp"
+  "file": "src/enable_entity_shared_from_this.cpp"
  }
 ]
