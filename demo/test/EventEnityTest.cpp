@@ -65,9 +65,9 @@ protected:
 int main()
 {
     // Create entities
-    auto a = std::make_shared< EntityA >();
-    auto b = std::make_shared< EntityB >();
-    auto c = std::make_shared< EntityC >();
+    auto a = va::make_entity_sptr< EntityA >();
+    auto b = va::make_entity_sptr< EntityB >();
+    auto c = va::make_entity_sptr< EntityB >();
 
     // Register entities to listen for MyEvent
     va_event_loop.Register( event_type_id< MyEvent >(), a );

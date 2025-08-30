@@ -7,19 +7,15 @@ namespace va {
 entity_Sptr::entity_Sptr(VaEntity* entity) : control_block_(nullptr) {
     if (entity == nullptr) return;
 
-    // 1. 新建控制块（原有逻辑）
     control_block_ = new EntityControlBlock(entity);
-
-    // 2. 尝试转换为 enable_entity_shared_from_this 基类
     auto shared_base = dynamic_cast<enable_entity_shared_from_this*>(entity);
     if (shared_base != nullptr) {
-        // 先释放原有 weak_this_（防止多次初始化）
+        // 安全初始化：先释放旧指针（即使为 nullptr，delete 也安全）
         delete shared_base->weak_this_;
-        // 用当前强指针构造弱指针，存入 shared_base
+        // 确保 new 成功（若内存不足，会抛出 bad_alloc，避免空指针）
         shared_base->weak_this_ = new entity_Wptr(*this);
     }
 }
-
 
 // 拷贝构造：强引用 +1
 entity_Sptr::entity_Sptr(const entity_Sptr& other) : control_block_(other.control_block_) {
@@ -54,54 +50,42 @@ entity_Sptr::~entity_Sptr() {
 }
 
 // 2. 赋值运算符实现
-entity_Sptr& entity_Sptr::operator=(const entity_Sptr& other) {
-    if (this != &other) {
-        // 先加对方计数（防止自我赋值时提前销毁）
-        EntityControlBlock* new_cb = other.control_block_;
-        if (new_cb != nullptr) {
-            new_cb->increment_strong();
-        }
-
-        // 释放当前所有权
-        reset();
-        control_block_ = new_cb;
-    }
-    return *this;
-}
-
+// 移动赋值
 entity_Sptr& entity_Sptr::operator=(entity_Sptr&& other) noexcept {
     if (this != &other) {
-        reset();
+        reset(); // 先释放当前控制块
         control_block_ = other.control_block_;
-        other.control_block_ = nullptr;
+        other.control_block_ = nullptr; // 关键：置空原指针
     }
     return *this;
 }
 
-// 重置：释放当前控制块，可选绑定新实体
+// entity_Sptr.cpp 中修改 reset()
 void entity_Sptr::reset(VaEntity* entity) {
     EntityControlBlock* cb = control_block_;
     control_block_ = nullptr;
-
+    
     if (cb != nullptr) {
-        // 强引用 -1，若归零则销毁实体
+        // 步骤1：强引用计数减1，用返回值判断是否归零（无竞态）
         bool strong_zero = cb->decrement_strong();
+        // 强引用归零必须调用 destroy_entity()，确保实体先销毁
         if (strong_zero) {
-            cb->destroy_entity();
+            cb->destroy_entity(); // 正常流程销毁实体，避免兜底逻辑
         }
 
-        // 弱引用 -1，若归零则销毁控制块
+        // 步骤2：弱引用计数减1，销毁控制块（此时实体已安全销毁）
         bool weak_zero = cb->decrement_weak();
         if (weak_zero) {
-            delete cb;
+            delete cb; // 控制块析构时，entity_ 已为 nullptr，无警告
         }
     }
 
-    // 绑定新实体（若有）
+    // 绑定新实体（原逻辑不变）
     if (entity != nullptr) {
         control_block_ = new EntityControlBlock(entity);
     }
 }
+
 
 // 3. 访问操作实现
 VaEntity& entity_Sptr::operator*() const {
@@ -155,5 +139,6 @@ bool operator==(const entity_Sptr& a, const entity_Sptr& b) {
 bool operator!=(const entity_Sptr& a, const entity_Sptr& b) {
     return a.get() != b.get();
 }
+
 }  // namespace va
 

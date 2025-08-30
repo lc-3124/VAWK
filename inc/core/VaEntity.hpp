@@ -2,6 +2,8 @@
 #define _VA_ENTITY_HPP_
 
 #include "VaEvent.hpp"
+#include "entity_Sptr.hpp"
+#include "enable_entity_shared_from_this.hpp"
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -39,7 +41,7 @@ class VaEventUpstream;
  * entity.eventPush(myEventPtr); // Pushes and immediately handles the event
  * entity.processOneEvent();     // Optionally, process one event from the buffer
  */
-class VaEntity :  public std::enable_shared_from_this<VaEntity>
+class VaEntity :  public enable_entity_shared_from_this
 {
   protected:
     // TODO need a lock-free queue
@@ -51,7 +53,7 @@ class VaEntity :  public std::enable_shared_from_this<VaEntity>
     // Store indexes of upstreams and downEntitys, they are used to mark
     // where the Entity subscribes events from and what sub-Entities it contains.
     std::vector< std::shared_ptr< VaEventUpstream > > Upstreams;
-    std::vector< std::shared_ptr< VaEntity > >       downEntitys;
+    std::vector< entity_Sptr > downEntitys;
     
     /*
      * Handle a single event.

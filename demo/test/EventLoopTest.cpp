@@ -111,7 +111,7 @@ class EntityC : public  EntityDemo
 };
 
 std::unordered_map< std::string , std::shared_ptr<va::event::EventBase> > EventContainer;
-std::unordered_map< std::string , std::shared_ptr<va::VaEntity> > EntityContainer;
+std::unordered_map< std::string , va::entity_Sptr > EntityContainer;
 
 void make_event ( std::string name , char type );
 void make_entity( std::string name , char   type );
@@ -294,11 +294,11 @@ void make_entity( std::string name , char type )
         return;
     }
 
-    std::shared_ptr<va::VaEntity> temp_entity;
+    va::entity_Sptr temp_entity;
     switch (type) {
-        case 'A': temp_entity = std::make_shared<EntityA>(); break;
-        case 'B': temp_entity = std::make_shared<EntityB>(); break;
-        case 'C': temp_entity = std::make_shared<EntityC>(); break;
+        case 'A': temp_entity = va::make_entity_sptr<EntityA>(); break;
+        case 'B': temp_entity = va::make_entity_sptr<EntityB>(); break;
+        case 'C': temp_entity = va::make_entity_sptr<EntityC>(); break;
         default: std::cout << RED << "Invalid entity type! Must be A-C" << RESET << std::endl; return;
     }
     temp_entity->setLabel(name);

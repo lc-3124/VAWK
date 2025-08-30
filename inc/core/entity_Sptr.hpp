@@ -2,6 +2,7 @@
 #define _ENTITY_SPTR_HPP_
 
 #include <cstddef>
+#include <functional>
 #include "EntityControlBlock.hpp"  // 依赖控制块声明
 #include "enable_entity_shared_from_this.hpp"
 
@@ -50,7 +51,39 @@ void swap(entity_Sptr& a, entity_Sptr& b) noexcept;
 // 比较运算符：比较指向的实体是否相同
 bool operator==(const entity_Sptr& a, const entity_Sptr& b);
 bool operator!=(const entity_Sptr& a, const entity_Sptr& b);
+
+// 模板函数：创建 entity_Sptr 管理的 VaEntity 子类对象
+// T：VaEntity 子类类型（如 EntityA、MyEntity）
+// Args：构造函数参数类型（可变参数）
+template <typename T, typename... Args>
+entity_Sptr make_entity_sptr(Args&&... args) {
+    // 编译期检查：确保 T 是 VaEntity 的派生类，避免错误类型
+    static_assert(std::is_base_of<VaEntity, T>::value, 
+            "make_entity_sptr: T must inherit from va::VaEntity");
+
+    // 1. 用完美转发传递参数，创建 T 类型对象（new 裸指针仅在此处出现，外部不可见）
+    // 2. 直接传递给 entity_Sptr 构造函数，由智能指针接管所有权
+    return entity_Sptr(new T(std::forward<Args>(args)...));
+}
 }  // namespace va
 
+namespace std
+{
+    template <>
+        struct hash<va::entity_Sptr> {
+            // 哈希函数：基于实体地址计算哈希值
+            size_t operator()(const va::entity_Sptr& sptr) const noexcept {
+                // 1. 获取实体的原始指针（空指针返回 0）
+                va::VaEntity* entity = sptr.get();
+                if (entity == nullptr) {
+                    return 0;  // 空指针的哈希值固定为 0
+                }
+                // 2. 将指针转换为 size_t（地址值），作为哈希值
+                // （或用 std::hash<void*> 计算指针的哈希，更通用）
+                return std::hash<void*>()(static_cast<void*>(entity));
+            }
+        };
+
+};
 #endif  // _ENTITY_SPTR_HPP_
 

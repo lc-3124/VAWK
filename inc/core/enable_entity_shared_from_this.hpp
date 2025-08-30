@@ -18,10 +18,10 @@ public:
     // 核心方法：返回自身的强指针/弱指针
     entity_Sptr Sptr_from_this();
     entity_Wptr Wptr_from_this() const;
+    entity_Wptr* weak_this_;
 
 private:
     // 关键：用弱指针存储自身（指针类型，前向声明支持）
-    entity_Wptr* weak_this_;
 
     // 友元：允许 entity_Sptr 初始化 weak_this_
     friend class entity_Sptr;

@@ -35,7 +35,7 @@ void VaEventRouter::DispatchOnce()
         return;
 
     // check if there is a co vector , refer it
-    std::vector< std::weak_ptr< VaEntity > >* listeners_ptr = nullptr;
+    std::vector< entity_Wptr >* listeners_ptr = nullptr;
     {
         std::lock_guard< std::mutex > lock( mtx );
         if ( event_id < Listeners.size() && !Listeners[ event_id ].empty() )
@@ -47,7 +47,7 @@ void VaEventRouter::DispatchOnce()
         return;
 
     // dispatch
-    std::vector< std::weak_ptr< VaEntity > >& listeners = *listeners_ptr;
+    std::vector< entity_Wptr >& listeners = *listeners_ptr;
     for ( auto it = listeners.begin(); it != listeners.end(); )
     {
         auto sptr = it->lock();

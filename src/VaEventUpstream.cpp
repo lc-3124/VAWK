@@ -1,12 +1,13 @@
 // VaEventUpstream
 #include "core/VaEventUpstream.hpp"
+#include "core/entity_Wptr.hpp"
 #include <algorithm>
 #include <thread>
 
 namespace va
 {
 
-void VaEventUpstream::Register( size_t event_id, std::shared_ptr< VaEntity > entity )
+void VaEventUpstream::Register( size_t event_id, entity_Sptr entity )
 {
     if ( !entity )
         return;
@@ -22,7 +23,7 @@ void VaEventUpstream::Register( size_t event_id, std::shared_ptr< VaEntity > ent
     // Avoid re-registration
     auto& vec = Listeners[ event_id ];
     auto  found =
-      std::find_if( vec.begin(), vec.end(), [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+      std::find_if( vec.begin(), vec.end(), [ &entity ]( const entity_Wptr wptr ) {
           auto sptr = wptr.lock();
           return sptr && sptr == entity;
       } );
@@ -34,7 +35,7 @@ void VaEventUpstream::Register( size_t event_id, std::shared_ptr< VaEntity > ent
     }
 }
 
-void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity )
+void VaEventUpstream::UnRegister( entity_Sptr entity )
 {
     if ( !entity )
         return;
@@ -50,7 +51,7 @@ void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity )
             {
                 auto& vec = Listeners[ idx ];
                 vec.erase( std::remove_if( vec.begin(), vec.end(),
-                                           [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+                                           [ &entity ]( const entity_Wptr& wptr ) {
                                                auto sptr = wptr.lock();
                                                return sptr && sptr == entity;
                                            } ),
@@ -93,7 +94,7 @@ void VaEventUpstream::UnRegister( size_t event_id )
     }
 }
 
-void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity, size_t event_id )
+void VaEventUpstream::UnRegister( entity_Sptr entity, size_t event_id )
 {
     if ( !entity || event_id >= Listeners.size() )
         return;
@@ -103,7 +104,7 @@ void VaEventUpstream::UnRegister( std::shared_ptr< VaEntity > entity, size_t eve
     // Remove from Listeners
     auto& vec = Listeners[ event_id ];
     vec.erase( std::remove_if( vec.begin(), vec.end(),
-                               [ &entity ]( const std::weak_ptr< VaEntity >& wptr ) {
+                               [ &entity ]( const entity_Wptr& wptr ) {
                                    auto sptr = wptr.lock();
                                    return sptr && sptr == entity;
                                } ),

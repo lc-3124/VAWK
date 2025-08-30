@@ -2,10 +2,10 @@
 #define _VA_EVENTUPSTREAM_HPP_
 
 #include "VaEntity.hpp"
+#include "entity_Wptr.hpp"
 
 #include <atomic>
 #include <condition_variable>
-#include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -29,13 +29,13 @@ class VaEventUpstream
     One using entity indexing for efficient entity deregistration
     */
     // Store listeners indexed by event ID
-    std::vector< std::vector< std::weak_ptr< VaEntity > > > Listeners;
+    std::vector< std::vector< entity_Wptr > > Listeners;
     // For quick lookup of events registered by specific entities
-    std::unordered_map< std::shared_ptr< VaEntity >, std::vector< size_t > > Listeners2;
+    std::unordered_map< entity_Sptr, std::vector< size_t > > Listeners2;
 
   public:
     // Register an entity to listen for a specific event
-    void Register( size_t event_id, std::shared_ptr< VaEntity > entity );
+    void Register( size_t event_id, entity_Sptr entity );
 
     // Dispatch one event from the buffer
     virtual void DispatchOnce() = 0;
@@ -49,9 +49,9 @@ class VaEventUpstream
     Unregister all entities from a specific event
     Unregister a specific event from a specific entity
     */
-    void UnRegister( std::shared_ptr< VaEntity > entity );
+    void UnRegister( entity_Sptr entity );
     void UnRegister( size_t event_id );
-    void UnRegister( std::shared_ptr< VaEntity > entity, size_t event_id );
+    void UnRegister( entity_Sptr entity, size_t event_id );
 
     // Start/stop the dispatch loop thread
     void eventloopStart();
