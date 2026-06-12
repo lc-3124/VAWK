@@ -18,13 +18,6 @@
   <img src="https://img.shields.io/badge/status-active-brightgreen">
 </p>
 
-<p align="center">
-  <a href="#-项目结构">📦 项目结构</a> •
-  <a href="#-快速开始">🚀 快速开始</a> •
-  <a href="#-构建">🔨 构建</a> •
-  <a href="#-许可">📜 许可</a>
-</p>
-
 > **当前状态：聚焦 TUI 工具库开发，Widget 框架暂停。**
 
 ---
@@ -57,31 +50,6 @@ VAWK/
 ├── Makefile
 ├── README.md
 └── LICENSE
-```
-
-## 🚀 快速开始
-
-```cpp
-#include <cstdio>
-#include <vaterm.hpp>
-
-int main() {
-    // 设置颜色并输出
-    printf("%sHello, TUI!%s\n",
-           vaterm::color::fg(vaterm::Color4::GREEN).c_str(),
-           vaterm::color::reset().c_str());
-
-    // 获取终端大小
-    uint16_t rows, cols;
-    vaterm::Terminal::size(rows, cols);
-    printf("Terminal: %dx%d\n", rows, cols);
-}
-```
-
-编译：
-
-```bash
-g++ --std=c++23 -Itui-utils/include demo.cpp -o demo
 ```
 
 ## 🔨 构建
