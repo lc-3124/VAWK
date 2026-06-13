@@ -1,7 +1,6 @@
 #ifndef VATERM_UTF_HPP
 #define VATERM_UTF_HPP
 
-#include <string>
 #include <string_view>
 
 namespace vaterm {
