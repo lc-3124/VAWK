@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <p align="center">
   <br>
   <img src="logo.jpg" alt="VAWK" width="320">
@@ -17,17 +18,6 @@
   <img src="https://img.shields.io/badge/platform-Linux-red?logo=linux">
   <img src="https://img.shields.io/badge/status-active-brightgreen">
 </p>
-
-<p align="center">
-  <a href="#-项目结构">项目结构</a> •
-  <a href="#-快速开始">快速开始</a> •
-  <a href="#-构建">构建</a> •
-  <a href="#-30天重构计划">重构计划</a> •
-  <a href="#-学习路线">学习路线</a> •
-  <a href="#-许可">许可</a>
-</p>
-
-> **2026-06-14 起，每天 1 小时，边学 C++ 边重构。**
 
 ---
 
@@ -64,41 +54,6 @@ VAWK/
 └── LICENSE
 ```
 
-## 快速开始
-
-```cpp
-#include <cstdio>
-#include <vaterm.hpp>
-
-int main() {
-    printf("%sHello, TUI!%s\n",
-           vaterm::color::fg(vaterm::Color4::GREEN).c_str(),
-           vaterm::color::reset().c_str());
-
-    uint16_t rows, cols;
-    vaterm::Terminal::size(rows, cols);
-    printf("Terminal: %dx%d\n", rows, cols);
-}
-```
-
-编译：
-```bash
-g++ --std=c++23 -Itui-utils/include demo.cpp -o demo
-```
-
-## 构建
-
-```bash
-make          # 当前为 header-only，仅提示
-make check    # 验证所有头文件编译通过
-make clean    # 清理
-```
-
----
-
-## 30天重构计划
-
-> ⏰ 每天 1 小时 · 2026-06-14 → 2026-07-13  
 
 ### Phase 1 — 基础设施 + vaterm 实现（Day 1-12）
 
@@ -165,8 +120,6 @@ make clean    # 清理
 
 ---
 
-### 学习顺序
-
 ```
 Week 1 ─── CMake 基础 →  doctest 用法  →  std::string  →  ANSI 转义
                                               ↓
@@ -194,12 +147,3 @@ Week 4 ─── 状态机  →  xterm 协议  →  组合模式  →  双缓冲
 ## 许可
 
 MIT License.
-
----
-
-<p align="center">
-  <sub>
-    Built by <a href="https://github.com/lc-3124">lc3124</a>
-    · Design assisted by <b>DeepSeek</b>
-  </sub>
-</p>
