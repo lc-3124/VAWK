@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <p align="center">
   <br>
   <img src="logo.jpg" alt="VAWK" width="320">
@@ -130,7 +129,6 @@ Week 3 ─── 模板与 type_id  →  智能指针  →  互斥锁  →  线�
 Week 4 ─── 状态机  →  xterm 协议  →  组合模式  →  双缓冲渲染
 ```
 
-
 | 主题 | 免费资源 |
 |------|---------|
 | CMake | 官网教程 `cmake --help-full` 或 <https://cmake.org/cmake/help/latest/guide/tutorial/> |
@@ -140,7 +138,6 @@ Week 4 ─── 状态机  →  xterm 协议  →  组合模式  →  双缓冲
 | Linux termios | `man termios` 或 <https://man7.org/linux/man-pages/man3/termios.3.html> |
 | xterm 鼠标 | <https://invisible-island.net/xterm/ctlseqs/ctlseqs.html> |
 | C++ 线程 | <https://cppreference.com/w/cpp/thread> |
-
 
 ---
 
