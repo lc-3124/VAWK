@@ -35,7 +35,7 @@
 | `enums.hpp` | `vaterm` | 枚举定义：`Color4`, `CursorDir`, `CursorShape`, `TextEffect`, `Rgb` |
 | `color.hpp` | `vaterm::color` | ANSI 颜色控制：4bit/256bit/RGB 颜色设置、文字特效、颜色空间转换与混合 |
 | `cursor.hpp` | `vaterm::cursor` | 光标控制：移动、定位、显示/隐藏、形状设置 |
-| `term.hpp` | `vaterm::Terminal` | 终端管理：raw mode、屏幕清空、终端大小、I/O |
+| `term.hpp` | `vaterm::terminal` | 终端管理：raw mode、屏幕清空、终端大小、I/O |
 | `system.hpp` | `vaterm::sys` | 系统信息：用户名、主机名、环境变量、当前目录 |
 | `utf.hpp` | `vaterm::utf` | UTF-8 处理：字符宽度、字节计数、字符串遍历 |
 
@@ -53,7 +53,7 @@ int main() {
 
     // 获取终端大小
     uint16_t rows, cols;
-    vaterm::Terminal::size(rows, cols);
+    vaterm::terminal::size(rows, cols);
     printf("Terminal: %dx%d\n", rows, cols);
 
     // 获取用户名

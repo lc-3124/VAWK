@@ -1,26 +1,382 @@
 [
- {
-  "directory": "/workspaces/VAWK",
-  "arguments": [
-   "g++",
-   "--std=c++23",
-   "-Wall",
-   "-Wextra",
-   "-g",
-   "-fPIC",
-   "-Werror",
-   "-fdiagnostics-color=always",
-   "-I.",
-   "-Iinc/",
-   "-MMD",
-   "-MP",
-   "-MF",
-   "build/dep/VaEntity.d",
-   "-c",
-   "src/VaEntity.cpp",
-   "-o",
-   "build/obj/VaEntity.o"
-  ],
-  "file": "src/VaEntity.cpp"
- }
+  {
+    "directory": "/home/lc3124/work/VAWK/test/utils",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-fPIC",
+      "-Werror",
+      "-fdiagnostics-color=always",
+      "-I../../tui-utils/include",
+      "color_demo.cpp",
+      "-o",
+      "color_demo"
+    ],
+    "file": "color_demo.cpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK/test/utils",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-fPIC",
+      "-Werror",
+      "-fdiagnostics-color=always",
+      "-I../../tui-utils/include",
+      "cursor_demo.cpp",
+      "-o",
+      "cursor_demo"
+    ],
+    "file": "cursor_demo.cpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK/test/utils",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-fPIC",
+      "-Werror",
+      "-fdiagnostics-color=always",
+      "-I../../tui-utils/include",
+      "term_demo.cpp",
+      "-o",
+      "term_demo"
+    ],
+    "file": "term_demo.cpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK/test/utils",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-fPIC",
+      "-Werror",
+      "-fdiagnostics-color=always",
+      "-I../../tui-utils/include",
+      "sys_demo.cpp",
+      "-o",
+      "sys_demo"
+    ],
+    "file": "sys_demo.cpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK/test/utils",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-fPIC",
+      "-Werror",
+      "-fdiagnostics-color=always",
+      "-I../../tui-utils/include",
+      "utf_demo.cpp",
+      "-o",
+      "utf_demo"
+    ],
+    "file": "utf_demo.cpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK/test/utils",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-fPIC",
+      "-Werror",
+      "-fdiagnostics-color=always",
+      "-I../../tui-utils/include",
+      "mouse_demo.cpp",
+      "-o",
+      "mouse_demo"
+    ],
+    "file": "mouse_demo.cpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk.hpp"
+    ],
+    "file": "include/vawk.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/drawable.hpp"
+    ],
+    "file": "include/vawk/drawable.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/entity.hpp"
+    ],
+    "file": "include/vawk/entity.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/event.hpp"
+    ],
+    "file": "include/vawk/event.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/event_router.hpp"
+    ],
+    "file": "include/vawk/event_router.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/event_upstream.hpp"
+    ],
+    "file": "include/vawk/event_upstream.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/input.hpp"
+    ],
+    "file": "include/vawk/input.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/widget.hpp"
+    ],
+    "file": "include/vawk/widget.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "include/vawk/window.hpp"
+    ],
+    "file": "include/vawk/window.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm.hpp"
+    ],
+    "file": "tui-utils/include/vaterm.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/color.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/color.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/cursor.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/cursor.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/enums.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/enums.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/mouse.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/mouse.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/system.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/system.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/term.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/term.hpp"
+  },
+  {
+    "directory": "/home/lc3124/work/VAWK",
+    "arguments": [
+      "g++",
+      "--std=c++23",
+      "-Wall",
+      "-Wextra",
+      "-fsyntax-only",
+      "-x",
+      "c++-header",
+      "-Iinclude",
+      "-Itui-utils/include",
+      "tui-utils/include/vaterm/utf.hpp"
+    ],
+    "file": "tui-utils/include/vaterm/utf.hpp"
+  }
 ]

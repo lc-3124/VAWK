@@ -1,7 +1,15 @@
-# VAWK  —  Makefile
+# =========================================================================
+#  VAWK — Visual Ansi Widget Kit  (root Makefile)
 #
-# Current state: header-only (no .cpp files to compile).
-# The Makefile is kept for future use when implementations are added.
+#  Top-level build orchestrator.  Delegates test builds to test/ and
+#  provides header-syntax-check for the header-only library modules.
+#
+#  Targets:
+#    all             — print status (header-only, nothing to build here)
+#    check           — syntax-check every .hpp with -fsyntax-only -Werror
+#    test            — build all test/demo binaries (delegates to test/)
+#    clean           — remove build artifacts
+# =========================================================================
 
 SHELL        := bash
 CXX          := g++
@@ -9,9 +17,7 @@ CXX_STD      := --std=c++23
 CXX_FLAGS    := -Wall -Wextra -g -fPIC -Werror -fdiagnostics-color=always
 INC_FLAGS    := -Iinclude -Itui-utils/include
 
-# ── Targets ────────────────────────────────────────────────────────────────
-
-.PHONY: all clean check
+.PHONY: all clean check test
 
 all:
 	@echo "VAWK is currently header-only. Nothing to build."
@@ -28,6 +34,11 @@ check:
 	done
 	@echo "All headers OK."
 
+# Build all test/demo programs.
+test:
+	$(MAKE) -C test all
+
 clean:
 	@rm -rf build
+	$(MAKE) -C test clean
 	@echo "Cleaned."

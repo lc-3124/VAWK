@@ -1,6 +1,24 @@
 #ifndef VAWK_EVENT_UPSTREAM_HPP
 #define VAWK_EVENT_UPSTREAM_HPP
 
+// -----------------------------------------------------------------------
+//  vawk::EventUpstream — event source base class
+//
+//  An EventUpstream is any component that produces events and delivers
+//  them to registered Entity instances.  It maintains two indexes:
+//
+//    listeners_[event_id]  → list of Entity* that want that event type
+//    entity_events_[entity] → list of event type IDs the entity is
+//                             registered for (for bulk unregister)
+//
+//  Entities are stored as raw pointers.  The caller must ensure every
+//  Entity is unregistered before it is destroyed.
+//
+//  Subclasses must implement dispatch_once() and dispatch_loop().
+//  The base class provides start_event_loop() / stop_event_loop() to
+//  run dispatch_loop() in a background thread.
+// -----------------------------------------------------------------------
+
 #include "entity.hpp"
 
 #include <atomic>
@@ -12,16 +30,6 @@
 
 namespace vawk {
 
-/// Base class for event sources that dispatch events to registered entities.
-///
-/// Maintains two indexes:
-///   - listeners_  : per-event-type list of raw Entity pointers
-///   - entity_events_ : per-entity list of registered event type IDs
-///
-/// Entities are stored as raw pointers (not shared_ptr/weak_ptr) to avoid
-/// the `shared_from_this()` lifetime issues present in the original design.
-/// The caller must ensure that entities are properly unregistered before
-/// they are destroyed.
 class EventUpstream {
   public:
     EventUpstream() = default;
@@ -29,30 +37,36 @@ class EventUpstream {
 
     // ── Registration ────────────────────────────────────────────────────
 
-    /// Register an entity to receive events of the given type.
+    // Register an entity to receive events of the given type ID.
     void register_listener(size_t event_id, Entity* entity);
 
-    /// Unregister an entity from all event types.
+    // Unregister an entity from all event types it is subscribed to.
     void unregister_listener(Entity* entity);
 
-    /// Unregister all entities from a specific event type.
+    // Unregister all entities from a specific event type.
     void unregister_listener(size_t event_id);
 
-    /// Unregister a specific entity from a specific event type.
+    // Unregister a specific entity from a specific event type.
     void unregister_listener(Entity* entity, size_t event_id);
 
-    // ── Dispatch ────────────────────────────────────────────────────────
+    // ── Dispatch (pure virtual) ─────────────────────────────────────────
 
-    /// Dispatch one event from the buffer (pure virtual).
+    // Dispatch exactly one event from the source to its listeners.
     virtual void dispatch_once() = 0;
 
-    /// Event loop running in a dedicated thread (pure virtual).
+    // Background event loop.  Runs continuously, calling dispatch_once()
+    // in a tight loop.  Used by start_event_loop() in a dedicated thread.
     virtual void dispatch_loop() = 0;
 
     // ── Lifecycle ───────────────────────────────────────────────────────
 
+    // Start the event loop in a background thread.
     void start_event_loop();
+
+    // Signal the event loop to stop and join the thread.
     void stop_event_loop();
+
+    // Check whether the event loop thread is currently running.
     bool is_running() const { return running_; }
 
   protected:
@@ -71,4 +85,3 @@ class EventUpstream {
 }  // namespace vawk
 
 #endif  // VAWK_EVENT_UPSTREAM_HPP
-

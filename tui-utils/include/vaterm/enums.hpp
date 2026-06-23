@@ -1,11 +1,20 @@
 #ifndef VATERM_ENUMS_HPP
 #define VATERM_ENUMS_HPP
 
+// -----------------------------------------------------------------------
+//  vaterm::enums — shared enumerations and simple data types
+//
+//  Provides the common type definitions used throughout the vaterm
+//  library. All values correspond to standard ANSI / ECMA-48 parameters.
+// -----------------------------------------------------------------------
+
 #include <cstdint>
 
 namespace vaterm {
 
-/// Cursor movement direction
+// ---- Cursor direction -------------------------------------------------
+//  Used by cursor::move() to specify which way to shift the cursor.
+
 enum class CursorDir : uint8_t {
     UP,
     DOWN,
@@ -13,7 +22,10 @@ enum class CursorDir : uint8_t {
     RIGHT,
 };
 
-/// Cursor shape (DECSCUSR)
+// ---- Cursor shapes (DECSCUSR) -----------------------------------------
+//  VTxxx cursor-style codes. Supported in xterm, kitty, foot, and most
+//  modern terminals. Values 1-6 correspond to the DECSCUSR parameter.
+
 enum class CursorShape : uint8_t {
     BLINKING_BLOCK      = 1,
     STEADY_BLOCK        = 2,
@@ -23,7 +35,10 @@ enum class CursorShape : uint8_t {
     STEADY_BAR          = 6,
 };
 
-/// ANSI text effects (SGR parameters)
+// ---- ANSI text effects (SGR parameters) -------------------------------
+//  Select Graphic Rendition parameters. Not all terminals support every
+//  effect; RAPID_BLINK in particular is often ignored.
+
 enum class TextEffect : uint8_t {
     RESET           = 0,
     BOLD            = 1,
@@ -37,7 +52,10 @@ enum class TextEffect : uint8_t {
     STRIKETHROUGH   = 9,
 };
 
-/// 4-bit color palette (standard ANSI colors)
+// ---- 4-bit ANSI color palette -----------------------------------------
+//  The sixteen standard terminal colors. Values 0-7 are the "dark" set;
+//  values 8-15 are the corresponding "bright" variants.
+
 enum class Color4 : uint8_t {
     BLACK           = 0,
     RED             = 1,
@@ -57,7 +75,10 @@ enum class Color4 : uint8_t {
     BRIGHT_WHITE    = 15,
 };
 
-/// An RGB color triplet
+// ---- RGB color triplet ------------------------------------------------
+//  Used by the 24-bit true-color API and the color-space conversion
+//  helpers (rgb_to_256, _256_to_rgb, etc.).
+
 struct Rgb {
     uint8_t r, g, b;
 };
@@ -65,4 +86,3 @@ struct Rgb {
 } // namespace vaterm
 
 #endif // VATERM_ENUMS_HPP
-
