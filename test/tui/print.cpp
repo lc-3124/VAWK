@@ -22,10 +22,9 @@
  *
  *   3. Style descriptors
  *      ──────────────────
- *      Style packs a foreground Color4, a background Color4, and a
- *      vector of TextEffect values (here BOLD + ITALIC).  VaTui
- *      diff-encodes style changes in swap() so that consecutive cells
- *      sharing the same style avoid redundant escape sequences.
+ *      Style stores pre-computed SGR strings for fg, bg, and effects.
+ *      Colours are converted when the Style is constructed; swap() simply
+ *      outputs the cached SGR — zero runtime colour conversion.
  *
  *   4. Frame loop
  *      ────────────
@@ -93,28 +92,28 @@ int main() {
 
         // Line 1 — bright red on blue at (0, 1)
         fb.printText({0, 1, outputb,
-            {Color4::BRIGHT_RED, Color4::BLUE,
-             {TextEffect::BOLD, TextEffect::ITALIC}}});
+            {.fg_sgr = fg(Color4::BRIGHT_RED), .bg_sgr = bg(Color4::BLUE),
+             .effects_sgr = effects({TextEffect::BOLD, TextEffect::ITALIC})}});
 
         // Line 2 — bright blue on red at (1, 5)
         fb.printText({1, 5, outputb,
-            {Color4::BRIGHT_BLUE, Color4::RED,
-             {TextEffect::BOLD, TextEffect::ITALIC}}});
+            {.fg_sgr = fg(Color4::BRIGHT_BLUE), .bg_sgr = bg(Color4::RED),
+             .effects_sgr = effects({TextEffect::BOLD, TextEffect::ITALIC})}});
 
         // Line 3 — bright red on red at (3, 10) (foreground blends)
         fb.printText({3, 10, outputb,
-            {Color4::BRIGHT_RED, Color4::RED,
-             {TextEffect::BOLD, TextEffect::ITALIC}}});
+            {.fg_sgr = fg(Color4::BRIGHT_RED), .bg_sgr = bg(Color4::RED),
+             .effects_sgr = effects({TextEffect::BOLD, TextEffect::ITALIC})}});
 
         // Line 4 — black on white at (4, 15)
         fb.printText({4, 15, outputb,
-            {Color4::BLACK, Color4::WHITE,
-             {TextEffect::BOLD, TextEffect::ITALIC}}});
+            {.fg_sgr = fg(Color4::BLACK), .bg_sgr = bg(Color4::WHITE),
+             .effects_sgr = effects({TextEffect::BOLD, TextEffect::ITALIC})}});
 
         // Overlay — user-movable cross-hair
         fb.printText({x, y, outputf,
-            {Color4::BRIGHT_MAGENTA, Color4::BRIGHT_YELLOW,
-             {TextEffect::BOLD, TextEffect::ITALIC}}});
+            {.fg_sgr = fg(Color4::BRIGHT_MAGENTA), .bg_sgr = bg(Color4::BRIGHT_YELLOW),
+             .effects_sgr = effects({TextEffect::BOLD, TextEffect::ITALIC})}});
 
         // --- Swap / flush -------------------------------------------
         fb.swap();

@@ -16,16 +16,6 @@
 
 namespace {
 
-bool operator==(const vatui::Style& a, const vatui::Style& b) {
-    return a.fg == b.fg
-        && a.bg == b.bg
-        && a.effects == b.effects;
-}
-
-bool operator!=(const vatui::Style& a, const vatui::Style& b) {
-    return !(a == b);
-}
-
 std::string cp_to_utf8(char32_t cp) {
     if (cp < 0x80)
         return std::string(1, static_cast<char>(cp));
@@ -40,15 +30,6 @@ std::string cp_to_utf8(char32_t cp) {
             static_cast<char>(0x80 | ((cp >> 12) & 0x3F)),
             static_cast<char>(0x80 | ((cp >> 6) & 0x3F)),
             static_cast<char>(0x80 | (cp & 0x3F))};
-}
-
-std::string style_to_seq(const vatui::Style& s) {
-    std::string out;
-    out += vaterm::color::fg(s.fg);
-    out += vaterm::color::bg(s.bg);
-    for (auto& e : s.effects)
-        out += vaterm::color::effect(e);
-    return out;
 }
 
 int cp_width(char32_t cp) {
@@ -176,6 +157,8 @@ void Framebuffer::printText(TextArgs args) {
     if (row >= max_row_) return;
     dirty_ = true;
 
+    uint32_t sid = intern_sgr_(style.fg_sgr + style.bg_sgr + style.effects_sgr);
+
     size_t pos = 0;
     while (pos < text.size() && col < max_col_) {
         // Protect multi-byte: check target cell's current state.
@@ -183,10 +166,14 @@ void Framebuffer::printText(TextArgs args) {
             auto idx_p = static_cast<size_t>(row) * max_col_ + col;
             auto& cell_p = buf_[idx_p];
             if (!cell_p.isHead_ && cell_p.isLong_ && col > 0) {
-                reset_cell_(buf_[idx_p - 1], cell_p.style_);
+                auto old = buf_[idx_p - 1].sgr_id_;
+                reset_cell_(buf_[idx_p - 1]);
+                buf_[idx_p - 1].sgr_id_ = old;
             }
             if (cell_p.isHead_ && cell_p.isLong_ && col + 1 < max_col_) {
-                reset_cell_(buf_[idx_p + 1], cell_p.style_);
+                auto old = buf_[idx_p + 1].sgr_id_;
+                reset_cell_(buf_[idx_p + 1]);
+                buf_[idx_p + 1].sgr_id_ = old;
             }
         }
 
@@ -225,7 +212,7 @@ void Framebuffer::printText(TextArgs args) {
             cell.cp_     = 0;
             cell.isHead_ = true;
             cell.isLong_ = false;
-            cell.style_  = style;
+            cell.sgr_id_ = sid;
             col += 1;
             continue;
         }
@@ -237,22 +224,28 @@ void Framebuffer::printText(TextArgs args) {
         cell.cp_     = cp;
         cell.isHead_ = true;
         cell.isLong_ = (w > 1);
-        cell.style_  = style;
+        cell.sgr_id_ = sid;
 
         // Wide char: occupy a second cell.
         if (w > 1 && col + 1 < max_col_) {
             size_t idx_n = idx + 1;
             auto& tail = buf_[idx_n];
-            if (!tail.isHead_ && tail.isLong_)
-                reset_cell_(buf_[idx_n - 1], tail.style_);
-            if (tail.isHead_ && tail.isLong_ && col + 2 < max_col_)
-                reset_cell_(buf_[idx_n + 1], tail.style_);
+            if (!tail.isHead_ && tail.isLong_) {
+                auto old = buf_[idx_n - 1].sgr_id_;
+                reset_cell_(buf_[idx_n - 1]);
+                buf_[idx_n - 1].sgr_id_ = old;
+            }
+            if (tail.isHead_ && tail.isLong_ && col + 2 < max_col_) {
+                auto old = buf_[idx_n + 1].sgr_id_;
+                reset_cell_(buf_[idx_n + 1]);
+                buf_[idx_n + 1].sgr_id_ = old;
+            }
 
             tail.data_   = ' ';
             tail.cp_     = 0;
             tail.isLong_ = true;
             tail.isHead_ = false;
-            tail.style_  = style;
+            tail.sgr_id_ = sid;
             col += 2;
         } else {
             col += 1;
@@ -264,8 +257,13 @@ void Framebuffer::printText(TextArgs args) {
 
 void Framebuffer::clear() {
     dirty_ = true;
-    for (auto& cell : buf_)
+    sgr_pool_.clear();
+    uint32_t sid = intern_sgr_(vaterm::color::fg(vaterm::Color4::WHITE)
+                             + vaterm::color::bg(vaterm::Color4::BLACK));
+    for (auto& cell : buf_) {
         reset_cell_(cell);
+        cell.sgr_id_ = sid;
+    }
 }
 
 void Framebuffer::clearRegion(RegionArgs args) {
@@ -285,22 +283,30 @@ void Framebuffer::fillRegion(FillArgs args) {
     auto& style = args.style;
 
     dirty_ = true;
+    uint32_t sid = intern_sgr_(style.fg_sgr + style.bg_sgr + style.effects_sgr);
+
     for (int r = row; r < row + h && r < max_row_; ++r) {
         for (int c = col; c < col + w && c < max_col_; ++c) {
             {
                 auto idx_f = static_cast<size_t>(r) * max_col_ + c;
                 auto& cell_f = buf_[idx_f];
-                if (!cell_f.isHead_ && cell_f.isLong_ && c > 0)
-                    reset_cell_(buf_[idx_f - 1], cell_f.style_);
-                if (cell_f.isHead_ && cell_f.isLong_ && c + 1 < max_col_)
-                    reset_cell_(buf_[idx_f + 1], cell_f.style_);
+                if (!cell_f.isHead_ && cell_f.isLong_ && c > 0) {
+                    auto old = buf_[idx_f - 1].sgr_id_;
+                    reset_cell_(buf_[idx_f - 1]);
+                    buf_[idx_f - 1].sgr_id_ = old;
+                }
+                if (cell_f.isHead_ && cell_f.isLong_ && c + 1 < max_col_) {
+                    auto old = buf_[idx_f + 1].sgr_id_;
+                    reset_cell_(buf_[idx_f + 1]);
+                    buf_[idx_f + 1].sgr_id_ = old;
+                }
             }
             auto& cell = cell_at_(c, r);
             cell.data_   = ch;
             cell.cp_     = static_cast<char32_t>(static_cast<unsigned char>(ch));
             cell.isHead_ = true;
             cell.isLong_ = false;
-            cell.style_  = style;
+            cell.sgr_id_ = sid;
         }
     }
 }
@@ -311,8 +317,8 @@ void Framebuffer::swap() {
     if (!dirty_) return;
     if (max_col_ == 0 || max_row_ == 0) return;
 
-    std::string out;
-    Style prev_style;
+    out_buf_.clear();
+    uint32_t prev_sid = static_cast<uint32_t>(-1);
     int   prev_r = -1, prev_c = -1;
 
     for (int r = 0; r < max_row_; ++r) {
@@ -322,20 +328,20 @@ void Framebuffer::swap() {
 
             bool seq = (r == prev_r && c == prev_c + 1);
 
-            if (!seq || cell.style_ != prev_style) {
+            if (!seq || cell.sgr_id_ != prev_sid) {
                 if (prev_r >= 0)
-                    out += vaterm::color::reset();
+                    out_buf_ += vaterm::color::reset();
                 if (!seq)
-                    out += vaterm::cursor::move_to(
+                    out_buf_ += vaterm::cursor::move_to(
                         r + off_row_ + 1, c + off_col_ + 1);
-                out += style_to_seq(cell.style_);
-                prev_style = cell.style_;
+                out_buf_ += sgr_pool_[cell.sgr_id_];
+                prev_sid = cell.sgr_id_;
             }
 
             if (cell.cp_ != 0)
-                out += cp_to_utf8(cell.cp_);
+                out_buf_ += cp_to_utf8(cell.cp_);
             else
-                out += cell.data_;
+                out_buf_ += cell.data_;
 
             prev_r = r;
             prev_c = c;
@@ -343,9 +349,9 @@ void Framebuffer::swap() {
     }
 
     if (prev_r >= 0)
-        out += vaterm::color::reset();
+        out_buf_ += vaterm::color::reset();
 
-    vaterm::terminal::write(out);
+    vaterm::terminal::write(out_buf_);
     vaterm::terminal::flush();
     dirty_ = false;
 }

@@ -48,9 +48,9 @@ int main() {
                        .ch = ' ', .style = s});
     };
 
-    Style style_blue  = {.fg = Color4::WHITE,  .bg = Color4::BRIGHT_BLUE};
-    Style style_red   = {.fg = Color4::WHITE,  .bg = Color4::BRIGHT_RED};
-    Style style_erase = {.fg = Color4::WHITE,  .bg = Color4::BLACK};
+    Style style_blue  = {.fg_sgr = fg(Rgb{255, 255, 255}),     .bg_sgr = bg(Rgb{60, 120, 255})};
+    Style style_red   = {.fg_sgr = fg(Color4::WHITE),          .bg_sgr = bg(Color8{196})};
+    Style style_erase = {.fg_sgr = fg(Color4::WHITE),          .bg_sgr = bg(Color4::BLACK)};
     Style style_draw  = style_blue;
 
     // Status area (bottom two rows).
@@ -151,12 +151,12 @@ int main() {
         if (bar.size() > static_cast<size_t>(cols)) bar.resize(cols);
 
         fb.fillRegion({.col = 0, .row = status_row, .w = cols, .h = 2,
-                       .ch = ' ', .style = {.fg = Color4::WHITE, .bg = Color4::BLACK}});
+                       .ch = ' ', .style = {.fg_sgr = fg(Color4::WHITE), .bg_sgr = bg(Color4::BLACK)}});
         fb.printText({.col = 0, .row = status_row, .text = bar,
-                      .style = {.fg = Color4::BRIGHT_GREEN, .bg = Color4::BLACK}});
+                      .style = {.fg_sgr = fg(Color4::BRIGHT_GREEN), .bg_sgr = bg(Color4::BLACK)}});
         fb.printText({.col = 0, .row = status_row + 1,
                        .text = "Q: quit  |  L: blue  R: red  M: erase  BSpc: erase  Ent: ok  ^U: clear",
-                      .style = {.fg = Color4::BRIGHT_BLACK, .bg = Color4::BLACK}});
+                      .style = {.fg_sgr = fg(Color4::BRIGHT_BLACK), .bg_sgr = bg(Color4::BLACK)}});
 
         fb.swap();
     }

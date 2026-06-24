@@ -12,6 +12,15 @@
 
 namespace vaterm {
 
+// ---- Terminal color-depth detection ------------------------------------
+//  Ordered from lowest to highest so the enum values can be compared:
+//    C4 < C8 < C24
+enum class ColorDepth : uint8_t {
+    C4  = 4,
+    C8  = 8,
+    C24 = 24,
+};
+
 // ---- Cursor direction -------------------------------------------------
 //  Used by cursor::move() to specify which way to shift the cursor.
 
@@ -81,6 +90,13 @@ enum class Color4 : uint8_t {
 
 struct Rgb {
     uint8_t r, g, b;
+};
+
+// ---- 8-bit (256-colour) index wrapper ----------------------------------
+//  Explicit wrapper to distinguish 8-bit color from a raw uint8_t in
+//  overload resolution.
+struct Color8 {
+    uint8_t index;
 };
 
 } // namespace vaterm

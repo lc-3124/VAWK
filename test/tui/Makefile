@@ -9,11 +9,14 @@ INC_FLAGS  := -I../../include -I../../tui-utils/include
 LIB_OBJ    := ../../build/bin.o/vatui.o
 LDFLAGS    := $(LIB_OBJ)
 
-TARGETS    := print paint
+TARGETS    := color print paint
 
 .PHONY: all clean check
 
 all: $(TARGETS)
+
+color: color.cpp $(LIB_OBJ)
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< $(LDFLAGS) -o $@
 
 print: print.cpp $(LIB_OBJ)
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< $(LDFLAGS) -o $@

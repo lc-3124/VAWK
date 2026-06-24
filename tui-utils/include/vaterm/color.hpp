@@ -181,6 +181,30 @@ inline uint8_t invert_256(uint8_t c) {
     );
 }
 
+// Find the nearest 4-bit ANSI colour for a 24-bit RGB value.
+inline Color4 nearest_4bit(uint8_t r, uint8_t g, uint8_t b) {
+    static constexpr uint8_t table[16][3] = {
+        {0, 0, 0}, {128, 0, 0}, {0, 128, 0}, {128, 128, 0},
+        {0, 0, 128}, {128, 0, 128}, {0, 128, 128}, {192, 192, 192},
+        {128, 128, 128}, {255, 0, 0}, {0, 255, 0}, {255, 255, 0},
+        {0, 0, 255}, {255, 0, 255}, {0, 255, 255}, {255, 255, 255},
+    };
+    int best = 0;
+    int best_dist = INT32_MAX;
+    for (int i = 0; i < 16; ++i) {
+        int dr = r - table[i][0];
+        int dg = g - table[i][1];
+        int db = b - table[i][2];
+        int dist = dr * dr + dg * dg + db * db;
+        if (dist < best_dist) { best_dist = dist; best = i; }
+    }
+    return static_cast<Color4>(best);
+}
+
+inline Color4 nearest_4bit(Rgb rgb) {
+    return nearest_4bit(rgb.r, rgb.g, rgb.b);
+}
+
 } // namespace color
 } // namespace vaterm
 

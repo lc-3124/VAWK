@@ -28,18 +28,43 @@
 #include <string_view>
 #include <vector>
 
+#include "vaterm/color.hpp"
 #include "vaterm/enums.hpp"
 #include "vaterm/mouse.hpp"
 #include "vaterm/term.hpp"
 
 namespace vatui {
 
-// ---- style descriptor ------------------------------------------------
+// ---- colour SGR helpers (immediate conversion) -------------------------
+// Each call immediately invokes the corresponding vaterm::color function
+// and returns the encoded SGR string.  Use inside Style initialisers:
+//   Style{.fg_sgr = fg(Color4::GREEN), .bg_sgr = bg(Color8{196})}
+
+inline std::string fg(vaterm::Color4 c) { return vaterm::color::fg(c); }
+inline std::string fg(vaterm::Color8 c) { return vaterm::color::fg(c.index); }
+inline std::string fg(vaterm::Rgb c)    { return vaterm::color::fg(c); }
+
+inline std::string bg(vaterm::Color4 c) { return vaterm::color::bg(c); }
+inline std::string bg(vaterm::Color8 c) { return vaterm::color::bg(c.index); }
+inline std::string bg(vaterm::Rgb c)    { return vaterm::color::bg(c); }
+
+inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
+    return vaterm::color::effect(list);
+}
+
+// ---- style descriptor (pre-computed SGR strings) -----------------------
+// Every colour value is converted to its ANSI SGR sequence at the point
+// of assignment.  fillRegion / printText then simply concatenate the
+// three pieces once and store the result in each Cell::sgr_.
+//
+//   Style{.fg_sgr = fg(Rgb{255,100,50}),
+//         .bg_sgr = bg(Color4::BLACK),
+//         .effects_sgr = effects({TextEffect::BOLD})}
 
 struct Style {
-    vaterm::Color4 fg   = vaterm::Color4::WHITE;
-    vaterm::Color4 bg   = vaterm::Color4::BLACK;
-    std::vector<vaterm::TextEffect> effects;
+    std::string fg_sgr      = vaterm::color::fg(vaterm::Color4::WHITE);
+    std::string bg_sgr      = vaterm::color::bg(vaterm::Color4::BLACK);
+    std::string effects_sgr;
 };
 
 // ---- parameter structs (enables designated-initialiser syntax) -------
@@ -137,31 +162,42 @@ class Framebuffer {
     friend class VaTui;
 
     struct Cell {
-        bool     isLong_ = false;
-        bool     isHead_ = false;
-        char32_t cp_     = 0;
-        char     data_   = ' ';
-        Style    style_;
+        bool        isLong_ = false;
+        bool        isHead_ = false;
+        char32_t    cp_     = 0;
+        char        data_   = ' ';
+        uint32_t    sgr_id_ = 0;
     };
 
     Cell& cell_at_(int col, int row) {
         return buf_[row * max_col_ + col];
     }
 
-    static void reset_cell_(Cell& cell, Style style = {}) {
+    static void reset_cell_(Cell& cell) {
         cell.data_   = ' ';
         cell.cp_     = 0;
         cell.isLong_ = false;
         cell.isHead_ = true;
-        cell.style_  = style;
+        // sgr_id_ not touched — caller sets it
     }
 
-    int              max_col_ = 0;
-    int              max_row_ = 0;
-    int              off_col_ = 0;
-    int              off_row_ = 0;
-    std::vector<Cell> buf_;
-    bool             dirty_  = false;
+    // Intern an SGR string: return its index in the pool (deduplicates,
+    // so that every Cell stores only a uint32_t instead of a full string).
+    uint32_t intern_sgr_(const std::string& s) {
+        for (size_t i = 0; i < sgr_pool_.size(); ++i)
+            if (sgr_pool_[i] == s) return static_cast<uint32_t>(i);
+        sgr_pool_.push_back(s);
+        return static_cast<uint32_t>(sgr_pool_.size() - 1);
+    }
+
+    int                   max_col_ = 0;
+    int                   max_row_ = 0;
+    int                   off_col_ = 0;
+    int                   off_row_ = 0;
+    std::vector<Cell>     buf_;
+    bool                  dirty_   = false;
+    std::string           out_buf_;         // reusable swap output buffer
+    std::vector<std::string> sgr_pool_;     // SGR deduplication pool
 };
 
 // ---- VaTui singleton -------------------------------------------------

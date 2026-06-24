@@ -26,6 +26,7 @@
 // -----------------------------------------------------------------------
 
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <termios.h>
@@ -97,6 +98,35 @@ class terminal {
     static std::string type() {
         auto* t = getenv("TERM");
         return t ? std::string(t) : std::string();
+    }
+
+    // Detect the terminal's maximum supported colour depth by inspecting
+    // $COLORTERM and $TERM.  The result is cached after the first call.
+    //
+    // Returns:
+    //   C24 — truecolor / 24-bit (e.g. $COLORTERM=truecolor)
+    //   C8  — 256-colour (e.g. $TERM=xterm-256color)
+    //   C4  — 16-colour / otherwise unknown
+    static ColorDepth detect_color_depth() {
+        static ColorDepth depth = [] {
+            auto* ct = getenv("COLORTERM");
+            if (ct) {
+                std::string_view sv(ct);
+                if (sv == "truecolor" || sv == "24bit")
+                    return ColorDepth::C24;
+            }
+            auto* term = getenv("TERM");
+            if (term) {
+                std::string_view sv(term);
+                if (sv.ends_with("-256color"))
+                    return ColorDepth::C8;
+                // Some modern terminals that always support truecolor
+                if (sv == "xterm-kitty" || sv == "alacritty" || sv == "foot" || sv == "foot-extra")
+                    return ColorDepth::C24;
+            }
+            return ColorDepth::C4;
+        }();
+        return depth;
     }
 
     // ---- Raw mode (instance methods) ------------------------------------
