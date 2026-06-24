@@ -1,13 +1,11 @@
 # =========================================================================
 #  VAWK — Visual Ansi Widget Kit  (root Makefile)
 #
-#  Top-level build orchestrator.  Delegates test builds to test/ and
-#  provides header-syntax-check for the header-only library modules.
-#
 #  Targets:
-#    all             — print status (header-only, nothing to build here)
+#    all             — print status
 #    check           — syntax-check every .hpp with -fsyntax-only -Werror
-#    test            — build all test/demo binaries (delegates to test/)
+#    lib             — compile src/utils/vatui.cpp → build/bin.o/vatui.o
+#    test            — build all test/demo programs (delegates to test/)
 #    clean           — remove build artifacts
 # =========================================================================
 
@@ -17,28 +15,38 @@ CXX_STD      := --std=c++23
 CXX_FLAGS    := -Wall -Wextra -g -fPIC -Werror -fdiagnostics-color=always
 INC_FLAGS    := -Iinclude -Itui-utils/include
 
-.PHONY: all clean check test
+.PHONY: all clean check test lib
 
 all:
-	@echo "VAWK is currently header-only. Nothing to build."
+	@echo "Use 'make lib' to build the vatui library object."
 	@echo "Use 'make check' to verify header compilation."
+	@echo "Use 'make test' to build all test programs."
 
 # Compile-check every header to catch syntax errors.
 check:
 	@echo "Checking headers..."
-	@for hdr in include/vawk.hpp include/vawk/*.hpp tui-utils/include/vaterm.hpp \
-	            tui-utils/include/vaterm/*.hpp; do \
+	@for hdr in include/vawk.hpp include/vawk/*.hpp \
+	            tui-utils/include/vaterm.hpp \
+	            tui-utils/include/vaterm/*.hpp \
+	            tui-utils/include/vatui.hpp; do \
 	    echo "  $$hdr"; \
 	    $(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -fsyntax-only -x c++-header "$$hdr" || \
 	        { echo "FAIL: $$hdr"; exit 1; }; \
 	done
 	@echo "All headers OK."
 
+# Build the vatui library object.
+lib: build/bin.o/vatui.o
+
+build/bin.o/vatui.o: src/utils/vatui.cpp tui-utils/include/vatui.hpp
+	@mkdir -p build/bin.o
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
+
 # Build all test/demo programs.
-test:
+test: lib
 	$(MAKE) -C test all
 
 clean:
-	@rm -rf build
+	@rm -rf build/bin.o
 	$(MAKE) -C test clean
 	@echo "Cleaned."

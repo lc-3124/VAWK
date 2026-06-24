@@ -24,16 +24,22 @@
 
 ```
 VAWK/
-├── tui-utils/              # TUI 工具库（vaterm）
-│   └── include/
-│       ├── vaterm.hpp        — 统一入口
-│       └── vaterm/
-│           ├── enums.hpp     — 枚举定义（颜色、光标、特效）
-│           ├── color.hpp     — ANSI 颜色控制
-│           ├── cursor.hpp    — 光标控制
-│           ├── term.hpp      — 终端管理（terminal 类）
-│           ├── system.hpp    — 系统信息
-│           └── utf.hpp       — UTF-8 处理
+├── tui-utils/              # TUI 工具库（vaterm + vatui）
+│   ├── include/
+│   │   ├── vaterm.hpp        — vaterm 统一入口
+│   │   ├── vatui.hpp         — Framebuffer（双缓冲、差异渲染）+ VaTui 单例（统一输入）
+│   │   └── vaterm/
+│   │       ├── enums.hpp     — 枚举定义（颜色、光标、特效）
+│   │       ├── color.hpp     — ANSI 颜色控制
+│   │       ├── cursor.hpp    — 光标控制
+│   │       ├── term.hpp      — 终端管理（terminal 类）
+│   │       ├── mouse.hpp     — SGR 鼠标追踪（MouseState、parse、capture）
+│   │       ├── system.hpp    — 系统信息
+│   │       └── utf.hpp       — UTF-8 处理
+│   └── MANUAL_zh.md          — 中文手册（vaterm + vatui）
+├── src/
+│   └── utils/
+│       └── vatui.cpp         — VaTui 实现（需编译为 build/bin.o/vatui.o）
 ├── include/                # VAWK 核心框架
 │   ├── vawk.hpp              — 统一入口
 │   └── vawk/

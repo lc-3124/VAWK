@@ -1,0 +1,92 @@
+[
+ {
+  "directory": "/home/lc3124/work/VAWK/test/utils",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-Werror",
+   "-fdiagnostics-color=always",
+   "-I../../tui-utils/include",
+   "color_demo.cpp",
+   "-o",
+   "color_demo"
+  ],
+  "file": "color_demo.cpp"
+ },
+ {
+  "directory": "/home/lc3124/work/VAWK/test/utils",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-Werror",
+   "-fdiagnostics-color=always",
+   "-I../../tui-utils/include",
+   "cursor_demo.cpp",
+   "-o",
+   "cursor_demo"
+  ],
+  "file": "cursor_demo.cpp"
+ },
+ {
+  "directory": "/home/lc3124/work/VAWK/test/utils",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-Werror",
+   "-fdiagnostics-color=always",
+   "-I../../tui-utils/include",
+   "term_demo.cpp",
+   "-o",
+   "term_demo"
+  ],
+  "file": "term_demo.cpp"
+ },
+ {
+  "directory": "/home/lc3124/work/VAWK/test/utils",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-Werror",
+   "-fdiagnostics-color=always",
+   "-I../../tui-utils/include",
+   "sys_demo.cpp",
+   "-o",
+   "sys_demo"
+  ],
+  "file": "sys_demo.cpp"
+ },
+ {
+  "directory": "/home/lc3124/work/VAWK/test/utils",
+  "arguments": [
+   "g++",
+   "--std=c++23",
+   "-Wall",
+   "-Wextra",
+   "-g",
+   "-fPIC",
+   "-Werror",
+   "-fdiagnostics-color=always",
+   "-I../../tui-utils/include",
+   "utf_demo.cpp",
+   "-o",
+   "utf_demo"
+  ],
+  "file": "utf_demo.cpp"
+ }
+]

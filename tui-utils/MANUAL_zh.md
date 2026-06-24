@@ -15,7 +15,8 @@
 7. [terminal — 终端管理](#7-terminal--终端管理)
 8. [sys — 系统信息](#8-sys--系统信息)
 9. [utf — UTF-8 工具](#9-utf--utf-8-工具)
-10. [注意事项](#10-注意事项)
+10. [vatui — 帧缓冲与输入封装](#10-vatui--帧缓冲与输入封装)
+11. [注意事项](#11-注意事项)
 
 ---
 
@@ -619,6 +620,196 @@ void print_aligned(const std::string& label, const std::string& value, int width
 ### 线程安全
 
 除 `terminal` 类（持有原始模式状态）外，所有函数均为纯函数，线程安全。
+
+## 10. vatui — 帧缓冲与输入封装
+
+> `vatui`（`tui-utils/include/vatui.hpp` + `src/utils/vatui.cpp`）是构建在 vaterm 之上的帧缓冲库。
+> 它提供了双缓冲单元格矩阵（1:1 映射到终端屏幕），并封装了鼠标/键盘输入。 与 vaterm 不同，
+> vatui 是分声明/实现文件的（.hpp + .cpp），需链接 `build/bin.o/vatui.o`。
+
+---
+
+### 10.1 帧缓冲 API
+
+```cpp
+namespace vatui {
+
+struct Style {
+    Color4 fg   = Color4::WHITE;
+    Color4 bg   = Color4::BLACK;
+    std::vector<TextEffect> effects;
+};
+
+// 所有绘制操作均使用形参结构体，支持 designated-initialiser 语法。
+struct SizeArgs      { int col, row; };
+struct PositionArgs  { int col, row; };
+struct TextArgs      { int col, row; std::string_view text; Style style = {}; };
+struct RegionArgs    { int col, row, w, h; };
+struct FillArgs      { int col, row, w, h; char ch; Style style = {}; };
+class Framebuffer {
+    void setSize(SizeArgs args);    // 调整缓冲区大小（自动清空）
+    int  getColMax() const;
+    int  getRowMax() const;
+
+    void setPosition(PositionArgs args);   // 渲染偏移
+    int  getOffsetCol() const;
+    int  getOffsetRow() const;
+
+    void printText(TextArgs args);         // 写入文本（支持 UTF-8、中日韩宽字符）
+    void clear();                          // 清除整个缓冲区
+    void clearRegion(RegionArgs args);
+    void fillRegion(FillArgs args);
+
+    void swap();  // 差异渲染：只输出变化的单元格，相邻同风格合并
+};
+
+class VaTui {
+    static VaTui& instance();   // 全局唯一实例
+
+    void init();                // 进入 raw mode、隐藏光标、清屏（幂等）
+
+    Framebuffer& buffer();      // 获取帧缓冲引用
+
+    std::optional<Input> getInput();
+    Input                waitInput();
+
+    void enableMouse();
+    void disableMouse();
+};
+
+}
+```
+
+**生命周期：**
+
+- `VaTui` 是单例（Meyer's Singleton）。首次调用 `instance()` 时构造函数自动
+  检测终端大小并设定 `Framebuffer` 尺寸。
+- `init()` 进入 raw mode、隐藏光标、清屏。可多次调用（幂等）。
+- 析构函数在程序退出时自动显示光标、清屏、恢复 termios。
+
+**宽字符保护：**
+
+写入新文本时自动处理被覆盖的宽字符碎片：
+- 如果目标单元格是某宽字符的尾部（`isLong = true`），则清理其头部（写为带**原始颜色**
+  的空格）。
+- 如果目标单元格是某宽字符的头部，则清理其尾部（同样保留原始颜色）。
+- 右边界放不下宽字符时，写入带当前风格的空格并继续。
+
+---
+
+### 10.2 统一输入 API
+
+vatui 提供统一的非阻塞/阻塞输入方法，通过 `Input.type` 区分键盘和鼠标事件：
+
+```cpp
+enum KeyCode : int {
+    KEY_NONE = 0,
+    KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
+    KEY_HOME, KEY_END, KEY_PGUP, KEY_PGDN, KEY_INS, KEY_DEL,
+    KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6,
+    KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11, KEY_F12,
+    KEY_ESC, KEY_TAB, KEY_ENTER, KEY_BACKSPACE,
+};
+
+struct Key {
+    char32_t cp   = 0;       // 可打印字符的 Unicode 码点
+    KeyCode  code = KEY_NONE; // 特殊键码（可打印键时为 KEY_NONE）
+    bool     alt  = false;   // Alt/Meta 修饰键
+    bool     ctrl = false;   // Ctrl 修饰键
+};
+
+enum InputType { INPUT_KEY = 0, INPUT_MOUSE = 1 };
+
+struct Input {
+    InputType          type;
+    Key                key;
+    vaterm::MouseState mouse;
+};
+
+// 在 VaTui 中（示例）：
+auto& tui = VaTui::instance();
+tui.init();
+auto& fb = tui.buffer();
+fb.printText({.col = 0, .row = 0, .text = "Hello",
+              .style = {.fg = Color4::GREEN, .bg = Color4::BLACK}});
+
+std::optional<Input> getInput();   // 非阻塞
+Input                waitInput();  // 阻塞
+
+void enableMouse();    // 发送 SGR 鼠标追踪开启序列（仅初始化后生效）
+void disableMouse();   // 发送关闭序列
+```
+
+**输入来源：**
+
+- 内部缓冲区 `input_buf_` 积累所有原始字节，按序解析。
+- `getInput()` 每次调用先非阻塞地耗尽 stdin 中所有可用字节，然后尝试从缓冲区头部解析：
+  1. 若以 `\033[<` 开头 → SGR 鼠标事件
+  2. 若以 `\033[` 开头（非 `<`）→ CSI 序列（箭头键、Home/End、F1–F12 等）
+  3. 若以 `\033O` 开头 → SS3 序列（F1–F4 另一编码）
+  4. 若以 `\033` + 可打印字符 → Alt+key
+  5. 裸 `\033` → Escape 键
+  6. 单字节控制符 → Tab / Enter / Backspace
+  7. ASCII 可打印字符 → 直接返回
+  8. 多字节 UTF-8 → 解码为 Unicode 码点
+  9. Ctrl+@/Ctrl+Space (0x00) → 空格 + Ctrl 标记
+  10. Ctrl+a–z (0x01–0x1A) → 对应字母 + Ctrl 标记
+  11. Ctrl+\  … Ctrl+_ (0x1C–0x1F) → `\`, `]`, `^`, `_` + Ctrl 标记
+- 不完整的序列留在缓冲区中，下次调用时继续解析。
+- `waitInput()` 循环调用 `getInput()`，若返回 `nullopt` 则 `poll()` 等待 50 ms 后重试。
+
+**完整示例：**
+
+```cpp
+#include <vatui.hpp>
+#include <cstdio>
+
+using namespace vatui;
+
+int main() {
+    auto& tui = VaTui::instance();
+    tui.init();
+    tui.enableMouse();
+
+    auto& fb = tui.buffer();
+    fb.printText({.col = 0, .row = 0, .text = "Move mouse or press Q",
+                  .style = {.fg = Color4::GREEN}});
+    fb.swap();
+
+    while (true) {
+        auto inp = tui.waitInput();
+        if (inp.type == INPUT_MOUSE) {
+            auto& m = inp.mouse;
+            printf("Mouse at (%d,%d)\n", m.col, m.row);
+        } else if (inp.type == INPUT_KEY) {
+            auto& k = inp.key;
+            if (k.code == KEY_ESC || k.cp == 'q' || k.cp == 'Q')
+                break;
+        }
+    }
+}
+```
+
+---
+
+### 10.3 构建
+
+vatui 不是 header-only，需要单独编译：
+
+```bash
+make lib                    # 编译为 build/bin.o/vatui.o
+g++ --std=c++23 -Iinclude -Itui-utils/include \
+    myapp.cpp build/bin.o/vatui.o -o myapp
+```
+
+测试程序：
+
+```bash
+make -C test/tui            # 编译 print（交互式帧缓冲测试）
+./test/tui/print            # 运行（WASD 移动叠加层，Q 退出）
+```
+
+---
 
 ### C++23 特性使用
 

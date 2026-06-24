@@ -153,8 +153,9 @@ inline std::optional<MouseState> mouse::parse(std::string_view seq) {
     auto btn   = cb & 3;
 
     MouseState ms;
-    ms.col = col;
-    ms.row = row;
+    // Terminal reports 1-based coordinates; convert to 0-based.
+    ms.col = col - 1;
+    ms.row = row - 1;
 
     // Map the two-button bitfield to our Button enum.
     auto to_btn = [](uint8_t b) -> MouseState::Button {

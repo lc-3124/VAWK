@@ -32,6 +32,8 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
+#include "cursor.hpp"
+
 namespace vaterm {
 
 class terminal {
@@ -77,6 +79,17 @@ class terminal {
         rows = ws.ws_row;
         cols = ws.ws_col;
         return true;
+    }
+
+    // Convenience wrappers around size() that return the value directly.
+    // Returns 0 on error (e.g. not a tty).
+    static int getColMax() {
+        uint16_t r = 0, c = 0;
+        return size(r, c) ? static_cast<int>(c) : 0;
+    }
+    static int getRowMax() {
+        uint16_t r = 0, c = 0;
+        return size(r, c) ? static_cast<int>(r) : 0;
     }
 
     // Return the value of the $TERM environment variable,
@@ -163,6 +176,11 @@ class terminal {
 };
 
 inline terminal::~terminal() {
+    if (raw_) {
+        write(cursor::show());
+        write(clear_screen());
+        flush();
+    }
     exit_raw();
 }
 
