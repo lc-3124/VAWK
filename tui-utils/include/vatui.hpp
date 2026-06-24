@@ -36,17 +36,71 @@
 namespace vatui {
 
 // ---- colour SGR helpers (immediate conversion) -------------------------
-// Each call immediately invokes the corresponding vaterm::color function
-// and returns the encoded SGR string.  Use inside Style initialisers:
+// Each call detects the terminal's colour depth on first invocation and
+// automatically converts the input to the terminal's native depth.
+// Use inside Style initialisers:
 //   Style{.fg_sgr = fg(Color4::GREEN), .bg_sgr = bg(Color8{196})}
+//
+// Conversion rules (fg&bg):
+//   Color4 → passthrough (4-bit works on any terminal)
+//   Color8 → C24: up-convert via _256_to_rgb
+//            C4:  down-convert via _256_to_rgb + nearest_4bit
+//            C8:  passthrough
+//   Rgb    → C24: passthrough
+//            C8:  down-convert via rgb_to_256
+//            C4:  down-convert via nearest_4bit
 
-inline std::string fg(vaterm::Color4 c) { return vaterm::color::fg(c); }
-inline std::string fg(vaterm::Color8 c) { return vaterm::color::fg(c.index); }
-inline std::string fg(vaterm::Rgb c)    { return vaterm::color::fg(c); }
+inline std::string fg(vaterm::Color4 c) {
+    return vaterm::color::fg(c);
+}
 
-inline std::string bg(vaterm::Color4 c) { return vaterm::color::bg(c); }
-inline std::string bg(vaterm::Color8 c) { return vaterm::color::bg(c.index); }
-inline std::string bg(vaterm::Rgb c)    { return vaterm::color::bg(c); }
+inline std::string fg(vaterm::Color8 c) {
+    static auto depth = vaterm::terminal::detect_color_depth();
+    if (depth >= vaterm::ColorDepth::C24) {
+        auto rgb = vaterm::color::_256_to_rgb(c.index);
+        return vaterm::color::fg(rgb);
+    }
+    if (depth == vaterm::ColorDepth::C4) {
+        auto rgb = vaterm::color::_256_to_rgb(c.index);
+        return vaterm::color::fg(vaterm::color::nearest_4bit(rgb));
+    }
+    return vaterm::color::fg(c.index);
+}
+
+inline std::string fg(vaterm::Rgb c) {
+    static auto depth = vaterm::terminal::detect_color_depth();
+    if (depth >= vaterm::ColorDepth::C24)
+        return vaterm::color::fg(c);
+    if (depth == vaterm::ColorDepth::C8)
+        return vaterm::color::fg(vaterm::color::rgb_to_256(c.r, c.g, c.b));
+    return vaterm::color::fg(vaterm::color::nearest_4bit(c));
+}
+
+inline std::string bg(vaterm::Color4 c) {
+    return vaterm::color::bg(c);
+}
+
+inline std::string bg(vaterm::Color8 c) {
+    static auto depth = vaterm::terminal::detect_color_depth();
+    if (depth >= vaterm::ColorDepth::C24) {
+        auto rgb = vaterm::color::_256_to_rgb(c.index);
+        return vaterm::color::bg(rgb);
+    }
+    if (depth == vaterm::ColorDepth::C4) {
+        auto rgb = vaterm::color::_256_to_rgb(c.index);
+        return vaterm::color::bg(vaterm::color::nearest_4bit(rgb));
+    }
+    return vaterm::color::bg(c.index);
+}
+
+inline std::string bg(vaterm::Rgb c) {
+    static auto depth = vaterm::terminal::detect_color_depth();
+    if (depth >= vaterm::ColorDepth::C24)
+        return vaterm::color::bg(c);
+    if (depth == vaterm::ColorDepth::C8)
+        return vaterm::color::bg(vaterm::color::rgb_to_256(c.r, c.g, c.b));
+    return vaterm::color::bg(vaterm::color::nearest_4bit(c));
+}
 
 inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
     return vaterm::color::effect(list);
