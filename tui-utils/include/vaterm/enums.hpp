@@ -99,6 +99,14 @@ struct Color8 {
     uint8_t index;
 };
 
+// ---- Transparent colour tag --------------------------------------------
+//  When used as fg/bg in a Style initialiser, produces an empty SGR
+//  string.  On importFrame this means "skip this plane" (no fg / no bg).
+//  On output the terminal renders its default colour (or the underlying
+//  destination content).
+struct Trans {};
+inline constexpr Trans TRANS{};
+
 } // namespace vaterm
 
 #endif // VATERM_ENUMS_HPP

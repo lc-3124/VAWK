@@ -49,11 +49,30 @@ struct Cell {
     bool        isHead_ = false;   // 是否为宽字符的头部
     char32_t    cp_     = 0;       // 字符的 Unicode 码点
     char        data_   = ' ';     // 实际字符（主要用于 ASCII 快速路径）
-    uint32_t    sgr_id_ = 0;       // SGR 池索引
+    uint32_t    sgr_id_ = 0;       // SGR 池索引 + 透明标记
 };
 ```
 
 每个 Cell 只有 12 字节。80×24 的屏幕 ~22 KB，缓存友好。
+
+### sgr_id_ 高 2 位：透明标记
+
+`sgr_id_` 的低 30 位是 `sgr_pool_` 索引，高 2 位编码该格的
+前景/背景是否设定了颜色（用于 `importFrame` 的透明合并）：
+
+```
+bit 31 (has_fg)  : 1 = fg 已设定（使用本格 fg），0 = fg 透明（继承目标）
+bit 30 (has_bg)  : 1 = bg 已设定（使用本格 bg），0 = bg 透明（继承目标）
+bits 29-0        : sgr_pool_ 索引（最大 1G 条目，实际 < 1000）
+```
+
+- `fg(Color4::GREEN)` + `bg(Color4::RED)` → `has_fg=1, has_bg=1`（完全不透明）
+- `fg(TRANS)` + `bg(Color4::RED)` → `has_fg=0, has_bg=1`（fg 透明）
+- `fg(Color4::GREEN)` + `bg(TRANS)` → `has_fg=1, has_bg=0`（bg 透明）
+- `fg(TRANS)` + `bg(TRANS)` → `has_fg=0, has_bg=0`（全透明）
+
+`swap()` 输出时只取低 30 位作为池索引（`sid & 0x3FFFFFFF`），
+高 2 位仅在 `importFrame` 合并时使用。
 
 ### 为什么用 uint32_t 而不是存 SGR 字符串或 Style 对象
 
@@ -115,16 +134,26 @@ static void reset_cell_(Cell& cell) {
 而是先去一个"字符串池"里查重：
 
 ```cpp
-uint32_t intern_sgr_(const std::string& s) {
+uint32_t intern_sgr_(const std::string& s, bool has_fg, bool has_bg) {
     for (size_t i = 0; i < sgr_pool_.size(); ++i)
-        if (sgr_pool_[i] == s) return i;
+        if (sgr_pool_[i] == s) {
+            uint32_t id = i;
+            if (has_fg) id |= 0x80000000u;
+            if (has_bg) id |= 0x40000000u;
+            return id;
+        }
     sgr_pool_.push_back(s);
-    return sgr_pool_.size() - 1;
+    uint32_t id = sgr_pool_.size() - 1;
+    if (has_fg) id |= 0x80000000u;
+    if (has_bg) id |= 0x40000000u;
+    return id;
 }
 ```
 
-如果池里已有相同字符串，返回已有索引；否则追加并返回新索引。
-这样每个唯一的 SGR 字符串在池中只存一份，Cell 只存 4 字节的索引。
+如果池里已有相同字符串，返回已有索引（加上高 2 位标记）；
+否则追加并返回新索引。
+每个唯一的 SGR 字符串在池中只存一份，Cell 只存 4 字节的整数
+（低 30 位 = 池索引，高 2 位 = 透明标记）。
 
 ### 流程示例
 
@@ -139,9 +168,9 @@ uint32_t intern_sgr_(const std::string& s) {
 ```
 调用 clear()
   │
-  ├─ sgr_pool_.clear()             清空池
-  ├─ intern_sgr_("\033[37m\033[40m") → 返回 0
-  └─ for 循环: cell.sgr_id_ = 0
+  ├─ sgr_pool_.clear()                          清空池
+  ├─ intern_sgr_("\033[37m", has_fg=1, has_bg=0) → id = 0x80000000
+  └─ for 循环: cell.sgr_id_ = 0x80000000
 ```
 
 ### 为什么线性搜索
@@ -274,6 +303,78 @@ if (cell_p.isHead_ && cell_p.isLong_) {
 
 ---
 
+## 5.5 importFrame — 全透明合并
+
+### 用途
+
+`importFrame` 将一个 Framebuffer（来源）按指定偏移叠到当前 Framebuffer
+（目标）上，支持按格的 fg/bg 透明通道独立控制：
+- 来源格 fg 透明 → 保留目标格的字符和前景色
+- 来源格 bg 透明 → 保留目标格的背景色
+- 来源格完全透明（fg+bg） → 跳过该格，目标格不变
+- 来源格完全不透明 → 完整覆盖目标格
+
+### 跨池重入
+
+来源 Framebuffer 有自己独立的 `sgr_pool_`，其中的池索引对目标无效。
+`importFrame` 对每个被合并的格重新调用目标的 `intern_sgr_()`，
+将合并后的 SGR 字符串注册到目标的池中。来源与目标的池互不影响。
+
+### 合并算法
+
+```cpp
+for each cell in src:
+    src_fg = (src_cell.sgr_id_ >> 31) != 0   // 高 2 位
+    src_bg = (src_cell.sgr_id_ >> 30) & 1
+
+    if !src_fg && !src_bg → skip  // 全透明，跳过
+
+    // 从来源或目标的池中取 SGR 字符串
+    src_sgr = src.sgr_pool_[src_cell.sgr_id_ & 0x3FFFFFFF]
+    dst_sgr =   dst.sgr_pool_[dst_cell.sgr_id_ & 0x3FFFFFFF]
+
+    // 逐部分合并：fg/bg 来自 src 或 dst
+    merged = ""
+    if src_fg → merged += extract_fg_sgr_(src_sgr)
+    else     → merged += extract_fg_sgr_(dst_sgr)
+    if src_bg → merged += extract_bg_sgr_(src_sgr)
+    else     → merged += extract_bg_sgr_(dst_sgr)
+    merged += extract_effects_sgr_(src_sgr)    // 效果始终取自来源
+
+    // 写入目标格
+    sid = intern_sgr_(merged, src_fg, src_bg)  // 保留来源的 TR 标记
+    reset_cell_(dst_cell)
+    dst_cell.sgr_id_ = sid
+    dst_cell.data_   = src_fg ? src_cell.data_ : dst_cell.data_
+    dst_cell.cp_     = src_fg ? src_cell.cp_   : dst_cell.cp_
+```
+
+### extract_*_sgr_ 辅助函数
+
+这些函数从完整的 SGR 字符串中提取各部分，供合并时使用：
+
+```cpp
+// 提取前景部分——第一个 \033[3x m 或 \033[9x m 序列
+std::string extract_fg_sgr_(const std::string& s);
+
+// 提取背景部分——第一个 \033[4x m 或 \033[10x m 序列
+std::string extract_bg_sgr_(const std::string& s);
+
+// 提取效果部分——\033[1m, \033[4m 等非颜色序列
+std::string extract_effects_sgr_(const std::string& s);
+```
+
+通过解析 `\033[` 前缀区分颜色/效果类别，确保合并时不引入空序列
+（如果某部分不存在，返回空字符串）。
+
+### 性能特征
+
+- 每个被覆盖的格：1 次 SGR 字符串拼接 + 1 次池搜索 + 1 次 uint32_t 赋值
+- SGR 池较小（典型 < 50 条目），池搜索是 cache 友好的线性扫描
+- 透明跳过的格：1 次位检查 + 1 次分支 → 零字符串操作
+
+---
+
 ## 6. 输入解析
 
 ### 输入缓冲区
@@ -400,5 +501,6 @@ vaterm 层函数（`vaterm::color::*` 等）是线程安全的——纯函数，
 | `test/tui/print.cpp` | CJK 文字+WASD 覆盖测试 |
 | `test/tui/paint.cpp` | 鼠标画板（全部键事件演示） |
 | `test/tui/color.cpp` | 三档颜色色块检测 |
+| `test/tui/cover.cpp` | importFrame 四象限透明叠层演示 |
 | `doc/dev/vaterm.md` | vaterm 层实现思路 |
 | `doc/man/vatui.md` | vatui 用户手册 |

@@ -1,31 +1,27 @@
 # =========================================================================
-#  test/tui/ — vatui test programs
+#  test/tui/ — vatui test programs (auto-detect all .cpp)
 # =========================================================================
 
 CXX        := g++
 CXX_STD    := --std=c++23
-CXX_FLAGS  := -Wall -Wextra -g -fPIC -Werror -Wno-missing-field-initializers -fdiagnostics-color=always
+CXX_FLAGS  := -Wall -Wextra -g -fPIC -Werror -Wno-missing-field-initializers \
+              -fdiagnostics-color=always
 INC_FLAGS  := -I../../include -I../../tui-utils/include
 LIB_OBJ    := ../../build/bin.o/vatui.o
 LDFLAGS    := $(LIB_OBJ)
 
-TARGETS    := color print paint
+SRCS       := $(wildcard *.cpp)
+TARGETS    := $(SRCS:.cpp=)
 
 .PHONY: all clean check
 
 all: $(TARGETS)
 
-color: color.cpp $(LIB_OBJ)
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< $(LDFLAGS) -o $@
-
-print: print.cpp $(LIB_OBJ)
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< $(LDFLAGS) -o $@
-
-paint: paint.cpp $(LIB_OBJ)
+%: %.cpp $(LIB_OBJ)
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< $(LDFLAGS) -o $@
 
 check: all
-	@echo "tui tests require a tty; run ./print manually."
+	@echo "tui tests require a tty; run manually: $(TARGETS)"
 
 clean:
 	rm -f $(TARGETS)

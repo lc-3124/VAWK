@@ -76,6 +76,8 @@ inline std::string fg(vaterm::Rgb c) {
     return vaterm::color::fg(vaterm::color::nearest_4bit(c));
 }
 
+inline std::string fg(vaterm::Trans) { return std::string{}; }
+
 inline std::string bg(vaterm::Color4 c) {
     return vaterm::color::bg(c);
 }
@@ -102,6 +104,8 @@ inline std::string bg(vaterm::Rgb c) {
     return vaterm::color::bg(vaterm::color::nearest_4bit(c));
 }
 
+inline std::string bg(vaterm::Trans) { return std::string{}; }
+
 inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
     return vaterm::color::effect(list);
 }
@@ -117,7 +121,7 @@ inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
 
 struct Style {
     std::string fg_sgr      = vaterm::color::fg(vaterm::Color4::WHITE);
-    std::string bg_sgr      = vaterm::color::bg(vaterm::Color4::BLACK);
+    std::string bg_sgr;                        // default: no bg (terminal native)
     std::string effects_sgr;
 };
 
@@ -209,6 +213,13 @@ class Framebuffer {
     void clearRegion(RegionArgs args);
     void fillRegion(FillArgs args);
 
+    // ── Import ──────────────────────────────────────────────────────
+    // Copy cells from another Framebuffer onto this one at (off_col, off_row).
+    // Wide-char fragments at the destination are cleaned before overwrite.
+    // Source wide-chars that overflow the destination right edge are
+    // replaced with a space in the source's style.
+    void importFrame(PositionArgs offset, const Framebuffer& src);
+
     // ── Output ──────────────────────────────────────────────────────
     void swap();
 
@@ -216,11 +227,11 @@ class Framebuffer {
     friend class VaTui;
 
     struct Cell {
-        bool        isLong_ = false;
-        bool        isHead_ = false;
-        char32_t    cp_     = 0;
-        char        data_   = ' ';
-        uint32_t    sgr_id_ = 0;
+        bool        isLong_    = false;
+        bool        isHead_    = false;
+        char32_t    cp_        = 0;
+        char        data_      = ' ';
+        uint32_t    sgr_id_    = 0;
     };
 
     Cell& cell_at_(int col, int row) {
@@ -235,13 +246,83 @@ class Framebuffer {
         // sgr_id_ not touched — caller sets it
     }
 
-    // Intern an SGR string: return its index in the pool (deduplicates,
-    // so that every Cell stores only a uint32_t instead of a full string).
-    uint32_t intern_sgr_(const std::string& s) {
+    // sgr_id encoding:
+    //   bit 31: has_fg (1 = foreground colour set, 0 = TRANS)
+    //   bit 30: has_bg (1 = background colour set, 0 = TRANS)
+    //   bits 0-29: index into sgr_pool_
+    static uint32_t make_sgr_id_(uint32_t index, bool has_fg, bool has_bg) {
+        return (has_fg ? 0x80000000u : 0) | (has_bg ? 0x40000000u : 0) | (index & 0x3FFFFFFF);
+    }
+
+    // Intern an SGR string: return its index in the pool (deduplicates
+    // across the pool) encoded with has_fg/has_bg flags in the high bits.
+    uint32_t intern_sgr_(const std::string& s, bool has_fg, bool has_bg) {
         for (size_t i = 0; i < sgr_pool_.size(); ++i)
-            if (sgr_pool_[i] == s) return static_cast<uint32_t>(i);
+            if (sgr_pool_[i] == s)
+                return make_sgr_id_(static_cast<uint32_t>(i), has_fg, has_bg);
         sgr_pool_.push_back(s);
-        return static_cast<uint32_t>(sgr_pool_.size() - 1);
+        return make_sgr_id_(static_cast<uint32_t>(sgr_pool_.size() - 1), has_fg, has_bg);
+    }
+
+    // Extract the foreground SGR sequence from a combined SGR string.
+    // Returns e.g. "\033[31m" or "" if none.
+    static std::string extract_fg_sgr_(const std::string& s) {
+        size_t last = s.rfind("\033[38;");           // 8/24-bit
+        for (auto p : {"\033[3", "\033[9"}) {       // 4-bit 30-37 / 90-97
+            auto pos = s.rfind(p);
+            if (pos != std::string::npos && pos + 3 < s.size()) {
+                char d = s[pos + 3];
+                if (d >= '0' && d <= '7' && pos > last) last = pos;
+            }
+        }
+        if (last == std::string::npos) return {};
+        auto end = s.find('m', last);
+        return s.substr(last, end + 1 - last);
+    }
+
+    // Extract the background SGR sequence from a combined SGR string.
+    static std::string extract_bg_sgr_(const std::string& s) {
+        size_t last = s.rfind("\033[48;");           // 8/24-bit
+        for (auto p : {"\033[4", "\033[10"}) {      // 4-bit 40-47 / 100-107
+            auto pos = s.rfind(p);
+            if (pos != std::string::npos && pos + 3 < s.size()) {
+                char d = s[pos + 3];
+                if (d >= '0' && d <= '7' && pos > last) last = pos;
+            }
+        }
+        // Exclude false match with \033[38
+        if (last != std::string::npos && last + 2 < s.size() && s[last + 2] == '3')
+            last = std::string::npos;  // 033[38 matched, not bg
+        if (last == std::string::npos) return {};
+        auto end = s.find('m', last);
+        return s.substr(last, end + 1 - last);
+    }
+
+    // Extract all non-colour SGR sequences (effects) from a combined SGR.
+    static std::string extract_effects_sgr_(const std::string& s) {
+        std::string r;
+        size_t pos = 0;
+        while ((pos = s.find("\033[", pos)) != std::string::npos) {
+            if (pos + 3 >= s.size()) break;
+            auto end = s.find('m', pos);
+            if (end == std::string::npos) break;
+            auto seq = s.substr(pos, end + 1 - pos);
+            bool is_color = false;
+            if (seq.size() > 4 && seq[3] == '8' && s[pos + 4] == ';')
+                is_color = true;                     // 38; or 48;
+            else if (seq.size() >= 4) {
+                char p1 = seq[2];                    // digit after '[' in "\033["
+                if ((p1 == '3' || p1 == '4') && seq[3] >= '0' && seq[3] <= '7')
+                    is_color = true;                 // 30-37 or 40-47
+                if (seq.size() >= 5 && p1 == '1' && seq[3] == '0' && seq[4] >= '0' && seq[4] <= '7')
+                    is_color = true;                 // 100-107
+                if (p1 == '9' && seq[3] >= '0' && seq[3] <= '7')
+                    is_color = true;                 // 90-97
+            }
+            if (!is_color) r += seq;
+            pos = end + 1;
+        }
+        return r;
     }
 
     int                   max_col_ = 0;

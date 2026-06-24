@@ -5,3 +5,8 @@ compile_commands.json
 .cache
 build/
 test/utils/*_demo
+test/tui/color
+test/tui/paint
+test/tui/print
+test/tui/cover
+

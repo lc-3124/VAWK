@@ -157,7 +157,8 @@ void Framebuffer::printText(TextArgs args) {
     if (row >= max_row_) return;
     dirty_ = true;
 
-    uint32_t sid = intern_sgr_(style.fg_sgr + style.bg_sgr + style.effects_sgr);
+    uint32_t sid = intern_sgr_(style.fg_sgr + style.bg_sgr + style.effects_sgr,
+                               !style.fg_sgr.empty(), !style.bg_sgr.empty());
 
     size_t pos = 0;
     while (pos < text.size() && col < max_col_) {
@@ -258,8 +259,8 @@ void Framebuffer::printText(TextArgs args) {
 void Framebuffer::clear() {
     dirty_ = true;
     sgr_pool_.clear();
-    uint32_t sid = intern_sgr_(vaterm::color::fg(vaterm::Color4::WHITE)
-                             + vaterm::color::bg(vaterm::Color4::BLACK));
+    uint32_t sid = intern_sgr_(vaterm::color::fg(vaterm::Color4::WHITE),
+                               true, false);   // has_fg, no bg
     for (auto& cell : buf_) {
         reset_cell_(cell);
         cell.sgr_id_ = sid;
@@ -283,7 +284,8 @@ void Framebuffer::fillRegion(FillArgs args) {
     auto& style = args.style;
 
     dirty_ = true;
-    uint32_t sid = intern_sgr_(style.fg_sgr + style.bg_sgr + style.effects_sgr);
+    uint32_t sid = intern_sgr_(style.fg_sgr + style.bg_sgr + style.effects_sgr,
+                               !style.fg_sgr.empty(), !style.bg_sgr.empty());
 
     for (int r = row; r < row + h && r < max_row_; ++r) {
         for (int c = col; c < col + w && c < max_col_; ++c) {
@@ -311,6 +313,91 @@ void Framebuffer::fillRegion(FillArgs args) {
     }
 }
 
+// ── Frame import ────────────────────────────────────────────────────────
+
+void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
+    if (&src == this) return;
+
+    for (int sr = 0; sr < src.max_row_; ++sr) {
+        int dr = offset.row + sr;
+        if (dr < 0 || dr >= max_row_) continue;
+
+        for (int sc = 0; sc < src.max_col_; ++sc) {
+            int dc = offset.col + sc;
+            if (dc < 0 || dc >= max_col_) continue;
+
+            const auto& src_cell = src.buf_[sr * src.max_col_ + sc];
+            if (!src_cell.isHead_) continue;
+
+            bool src_fg = (src_cell.sgr_id_ >> 31) != 0;
+            bool src_bg = (src_cell.sgr_id_ >> 30) & 1;
+
+            // Fully transparent: preserve destination cell entirely.
+            if (!src_fg && !src_bg) continue;
+
+            auto& dst_cell = cell_at_(dc, dr);
+
+            // ── Fragment cleanup at head position ──
+            if (!dst_cell.isHead_ && dst_cell.isLong_ && dc > 0) {
+                auto old = cell_at_(dc - 1, dr).sgr_id_;
+                reset_cell_(cell_at_(dc - 1, dr));
+                cell_at_(dc - 1, dr).sgr_id_ = old;
+            }
+            if (dst_cell.isHead_ && dst_cell.isLong_ && dc + 1 < max_col_) {
+                auto old = cell_at_(dc + 1, dr).sgr_id_;
+                reset_cell_(cell_at_(dc + 1, dr));
+                cell_at_(dc + 1, dr).sgr_id_ = old;
+            }
+
+            const auto& src_sgr = src.sgr_pool_[src_cell.sgr_id_ & 0x3FFFFFFF];
+            const auto& dst_sgr = sgr_pool_[dst_cell.sgr_id_ & 0x3FFFFFFF];
+
+            // Build merged SGR: take fg/bg from src or dst depending on TRANS.
+            std::string merged;
+            if (src_fg) merged += extract_fg_sgr_(src_sgr);
+            else        merged += extract_fg_sgr_(dst_sgr);
+            if (src_bg) merged += extract_bg_sgr_(src_sgr);
+            else        merged += extract_bg_sgr_(dst_sgr);
+            merged += extract_effects_sgr_(src_sgr);
+
+            // Right-edge overflow: space with merged style.
+            int w = src_cell.isLong_ ? 2 : 1;
+            if (dc + w > max_col_) {
+                uint32_t sid = intern_sgr_(merged, src_fg, src_bg);
+                reset_cell_(dst_cell);
+                dst_cell.sgr_id_ = sid;
+                dirty_ = true;
+                continue;
+            }
+
+            uint32_t sid = intern_sgr_(merged, src_fg, src_bg);
+            reset_cell_(dst_cell);
+            dst_cell.sgr_id_ = sid;
+            dst_cell.data_   = src_fg ? src_cell.data_ : dst_cell.data_;
+            dst_cell.cp_     = src_fg ? src_cell.cp_   : dst_cell.cp_;
+            dst_cell.isLong_ = src_cell.isLong_;
+            dst_cell.isHead_ = true;
+            dirty_ = true;
+
+            if (src_cell.isLong_ && dc + 1 < max_col_) {
+                auto& dst_tail = cell_at_(dc + 1, dr);
+                if (dst_tail.isHead_ && dst_tail.isLong_ && dc + 2 < max_col_) {
+                    auto old = cell_at_(dc + 2, dr).sgr_id_;
+                    reset_cell_(cell_at_(dc + 2, dr));
+                    cell_at_(dc + 2, dr).sgr_id_ = old;
+                }
+                const auto& src_tail = src.buf_[sr * src.max_col_ + sc + 1];
+                reset_cell_(dst_tail);
+                dst_tail.sgr_id_ = sid;
+                dst_tail.data_   = src_fg ? src_tail.data_ : ' ';
+                dst_tail.cp_     = src_fg ? src_tail.cp_   : 0;
+                dst_tail.isLong_ = true;
+                dst_tail.isHead_ = false;
+            }
+        }
+    }
+}
+
 // ── Output ─────────────────────────────────────────────────────────────
 
 void Framebuffer::swap() {
@@ -334,7 +421,7 @@ void Framebuffer::swap() {
                 if (!seq)
                     out_buf_ += vaterm::cursor::move_to(
                         r + off_row_ + 1, c + off_col_ + 1);
-                out_buf_ += sgr_pool_[cell.sgr_id_];
+                out_buf_ += sgr_pool_[cell.sgr_id_ & 0x3FFFFFFF];
                 prev_sid = cell.sgr_id_;
             }
 
