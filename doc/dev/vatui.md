@@ -31,134 +31,183 @@
   └──────────────────────────────────────┘
 ```
 
-Framebuffer 不直接调用终端，所有 ANSI 转义序列通过 `vaterm::color::*` 生成后缓存。
+Framebuffer 不直接调用终端。所有 ANSI 转义序列在 `fillRegion` / `printText`
+时通过 `vaterm::color::*` 预计算后存入 SGR 池。
+`swap()` 只做整数比较和池索引查表，不做任何颜色转换。
 
 ---
 
-## 2. Cell 的三次演变
+## 2. Cell 的结构设计
 
-### 阶段一：`Cell::style_`
+### 数据结构
 
-```cpp
-struct Cell {
-    Style    style_;       // fg:Color4 + bg:Color4 + effects:vector
-    // ...
-};
-```
-
-`swap()` 遍历时每遇到风格不同的格子就调用 `style_to_seq(style_)`。
-问题：216 色块的立方体导致 swap 内做 216 次颜色转换。
-
-### 阶段二：`Cell::sgr_` (std::string)
+每个屏幕格子用一个 `Cell` 结构体表示：
 
 ```cpp
 struct Cell {
-    std::string sgr_;      // 预计算的 SGR 字符串
-    // ...
+    bool        isLong_ = false;   // 是否为宽字符的一部分
+    bool        isHead_ = false;   // 是否为宽字符的头部
+    char32_t    cp_     = 0;       // 字符的 Unicode 码点
+    char        data_   = ' ';     // 实际字符（主要用于 ASCII 快速路径）
+    uint32_t    sgr_id_ = 0;       // SGR 池索引
 };
 ```
 
-`fillRegion` / `printText` 在写入时一次算好 SGR 字符串，循环内 `cell.sgr_ = sgr`
-（string 拷贝）。`swap()` 只比较 string + 直接输出。
+每个 Cell 只有 12 字节。80×24 的屏幕 ~22 KB，缓存友好。
 
-Cell 大小约 40 B（含 SSO buffer）。1920 格全屏 ~77 KB。
+### 为什么用 uint32_t 而不是存 SGR 字符串或 Style 对象
 
-### 阶段三：`Cell::sgr_id_` (uint32_t) ← 当前
+存字符串的话每个 Cell ~40 字节（含 SSO buffer），全屏 77 KB。
+而且 `swap()` 时需要逐格比较字符串内容。
+
+存 `sgr_id_`（池索引）只要 4 字节。`swap()` 比较两个 uint32_t
+等于一条 CPU 指令。SGR 字符串的实际内容存放在一个全局向量中，
+由所有同色的 Cell 共享。
+
+### 字符存储
+
+`data_` 存 `char` 是因为大部分场景是 ASCII 快速路径。
+`cp_` 存 `char32_t` 是为 CJK 和 Emoji 准备的。`printText` 写入时
+同时写两者：如果字符是 ASCII，`data_=ch, cp_=ch`；
+如果是多字节字符，`data_=' ', cp_=解码后的码点`。
+
+`swap()` 输出时优先用 `data_`（避开多字节解码路径）。
+
+### isHead_ / isLong_ 双标记
+
+宽字符（汉字、Emoji）在屏幕上占 2 列，因此需要 2 个 Cell：
+
+```
+列:  0    1
+    [漢] [漢]       ← 两个 Cell 代表一个汉字
+    head  tail
+    long  long
+```
+
+- 左格：`isHead_=true,  isLong_=true` — 负责输出字符
+- 右格：`isHead_=false, isLong_=true` — 只是占位，swap 跳过
+
+普通字符（英文字母、数字）：
+- `isHead_=true,  isLong_=false` — 占一个格子
+
+### reset_cell_ 不重置 sgr_id_
 
 ```cpp
-struct Cell {
-    uint32_t    sgr_id_;   // 指向 sgr_pool_ 的索引
-    // ...
-};
+static void reset_cell_(Cell& cell) {
+    cell.data_   = ' ';
+    cell.cp_     = 0;
+    cell.isLong_ = false;
+    cell.isHead_ = true;
+    // sgr_id_ 不重置——调用者管理
+}
 ```
 
-Cell 缩至 12 B，1920 格 ~22 KB。SGR 字符串移入全局池。
+这是有意为之：宽字符碎片清理时需要保留原始颜色（见第 5 节）。
+如果 `reset_cell_` 把 `sgr_id_` 也重置了，碎片就丢了颜色。
 
 ---
 
-## 3. SGR 驻留池 (intern pool)
+## 3. SGR 驻留池（intern pool）
 
-### 结构
+### 原理
+
+当用户在缓冲区画一个带颜色的格子时，颜色不会直接存入 Cell，
+而是先去一个"字符串池"里查重：
 
 ```cpp
-class Framebuffer {
-    std::vector<std::string> sgr_pool_;    // 唯一 SGR 字符串
-    std::string              out_buf_;     // swap 输出缓冲
-
-    uint32_t intern_sgr_(const std::string& s) {
-        for (size_t i = 0; i < sgr_pool_.size(); ++i)
-            if (sgr_pool_[i] == s) return static_cast<uint32_t>(i);
-        sgr_pool_.push_back(s);
-        return static_cast<uint32_t>(sgr_pool_.size() - 1);
-    }
-};
+uint32_t intern_sgr_(const std::string& s) {
+    for (size_t i = 0; i < sgr_pool_.size(); ++i)
+        if (sgr_pool_[i] == s) return i;
+    sgr_pool_.push_back(s);
+    return sgr_pool_.size() - 1;
+}
 ```
 
-### 生命流程
+如果池里已有相同字符串，返回已有索引；否则追加并返回新索引。
+这样每个唯一的 SGR 字符串在池中只存一份，Cell 只存 4 字节的索引。
+
+### 流程示例
 
 ```
-用户调用 fillRegion(fg_sgr="\033[32m", bg_sgr="\033[40m")
+调用 fillRegion({fg_sgr="\033[32m", bg_sgr="\033[40m"})
   │
-  ├─ concat: "\033[32m\033[40m"
-  ├─ intern_sgr_ → 池查找 → 没找到 → push → 返回 index 2
-  └─ for (cell : buf)
-       └─ cell.sgr_id_ = 2          (4 B 赋值)
+  ├─ 拼接: "\033[32m\033[40m"
+  ├─ intern_sgr_ → 池中已有 → 返回 index 2
+  └─ for 循环: cell.sgr_id_ = 2 (4 字节赋值)
 ```
 
 ```
-用户调用 clear()
+调用 clear()
   │
-  ├─ sgr_pool_.clear()              (池清空)
+  ├─ sgr_pool_.clear()             清空池
   ├─ intern_sgr_("\033[37m\033[40m") → 返回 0
-  └─ for (cell : buf)
-       └─ cell.sgr_id_ = 0          (4 B 赋值)
+  └─ for 循环: cell.sgr_id_ = 0
 ```
 
-### 为什么池查找用线性搜
+### 为什么线性搜索
 
-池非常小：
-- 一个典型的 paint 程序：黑底白字 (1) + 蓝 (1) + 红 (1) + 擦除 (1) + 状态栏 (2) = ~6 条
-- 6×6×6 色块：最多 216 条（全不同），但这是极端情况
-- clear() 或 setSize() 时池被清空重启
+池非常小。典型的应用：
+- paint 画板：黑底白字(1) + 蓝色(1) + 红色(1) + 擦除(1) + 状态栏(2) ≈ 6 条
+- 极端情况 6×6×6 色块：最多 216 条
 
-线性搜在池大小 < 1000 时比 hash 更快（无 hash 计算，cache 友好）。
+线性搜在 < 1000 条目时比哈希表更快：
+- 无哈希计算开销
+- 顺序内存访问，cache 友好
+- `clear()` 是 O(1)，vector 不释放内存
 
-### 碎片清理时如何保留原始 SGR
+用 `unordered_map` 或 `set` 的话，每次 `clear()` 需要 O(N) 节点析构，
+而且每个条目多 8–16 字节的桶指针开销。
 
-宽字符碎片清理时需要保留被覆盖格子的颜色。代码：
+### out_buf_ 复用
 
-```cpp
-// 保存旧格子的池索引
-auto old_sid = buf_[idx - 1].sgr_id_;
-// 重置格子
-reset_cell_(buf_[idx - 1]);
-// 恢复池索引
-buf_[idx - 1].sgr_id_ = old_sid;
-```
+`swap()` 使用一个 `std::string out_buf_` 累积输出。
+每次 `swap()` 开头 `out_buf_.clear()`（保留 capacity），末尾一次性 `write()`。
 
-只拷贝 4 字节，而非 string 的深拷贝。之前 string 版本做的是完整的堆分配 + 拷贝。
+好处：
+- 两次 swap 之间如果输出量相近，不会重新分配堆内存
+- 相比每次新建临时 string，避免反复 malloc/free
+
+### dirty_ 标记
+
+`dirty_` 在 `printText` / `fillRegion` / `clear` 时置 true。
+`swap()` 开头检查：如果为 false，跳过任何终端写入。
+`swap()` 末尾重置为 false。
+
+如果一个画面没有任何修改，swap 是空操作——零系统调用。
 
 ---
 
-## 4. 差异渲染 (swap 算法)
+## 4. swap 算法（差异渲染）
 
 ### 核心思路
 
-只输出"自上次 swap 以来发生变化"的虚拟屏幕区域。每次 swap 将逻辑缓冲区与物理终端同步。
+每次 `swap()` 遍历逻辑缓冲区（`buf_`），与物理终端（上次 swap 的输出）
+做 diff，只输出变化的单元格。
 
 ### 逐行扫描
 
 ```
 for (r = 0..max_row) {
     for (c = 0..max_col) {
-        跳过非头部 (isHead_=false)
-        当前格 (r,c) 与上一格 (pr,pc) 比较：
-          ─ 相邻？ pr==r && pc+1==c
-          ─ 风格相同？ sgr_id_ == prev_sid
+        if (!isHead_) continue;          // 跳过宽字符尾部
 
-        相邻 + 风格一致 → 只追加字符，无控制序列
-        不相邻           → move_to(r,c) + SGR + 字符
-        相邻但风格不同   → reset + SGR + 字符
+        bool adjacent = (r == prev_r && c == prev_c + 1);
+        bool same_sgr = (sgr_id_ == prev_sid);
+
+        if (adjacent && same_sgr) {
+            // 相邻且同风格：只追加字符，无控制序列
+            out_buf_ += data_;
+        } else if (!adjacent) {
+            // 不连续：移动光标 + 设置风格 + 字符
+            out_buf_ += move_to(r, c);
+            out_buf_ += sgr_pool_[sgr_id_];
+            out_buf_ += data_;
+        } else {
+            // 相邻但风格不同：结束上一个 SGR + 新 SGR + 字符
+            out_buf_ += "\033[0m";
+            out_buf_ += sgr_pool_[sgr_id_];
+            out_buf_ += data_;
+        }
     }
 }
 ```
@@ -166,148 +215,151 @@ for (r = 0..max_row) {
 ### 合并相邻同风格
 
 ```
-  "AAAAABBBBB"              ← buffer 内容
-  ↑  SGR_A  ↑  SGR_B        ← 只输出两个 SGR 序列
-  不输出: SGR_A SGR_A ...     ← 相邻同风格格子跳过
+屏幕显示:  你好世界
+SGR 分布:  [RED  ][GREEN]
+输出:      SGR_RED + "你好" + "\033[0m" + SGR_GREEN + "世界"
+           不输出: SGR_RED + "你" + SGR_RED + "好" + ...
 ```
 
-`seq` 布尔值判断相邻性：
+连续同风格的格子共享同一个 SGR 序列，避免重复输出。
 
-```cpp
-bool seq = (r == prev_r && c == prev_c + 1);
-// true  → 当前格紧跟在上一格右边，可以省略 move_to
-// false → 需要 move_to 定位
-```
+### 为什么不用两帧缓冲
 
-### out_buf_ 复用
-
-每次 swap 开头 `out_buf_.clear()`（保留 `capacity()`），
-末尾 `write(out_buf_)`。两次 swap 之间：
-- 如果输出量相近，不会重新分配堆内存
-- 相比每次 `std::string out;`，避免反复 malloc/free
+典型的双缓冲方案需要两个同样大小的缓冲区，`swap()` 时做全量拷贝。
+vatui 只保留一个逻辑缓冲区，物理终端的状态"隐含"在上次 swap 输出中。
+每次 swap 只输出变化部分，减少 I/O。
 
 ---
 
 ## 5. 宽字符保护
 
-### isHead_ / isLong_ 双标记
+### 问题
 
-每个宽字符占据两个 Cell（width=2）：
-- 左格：`isHead_=true,  isLong_=true`
-- 右格：`isHead_=false, isLong_=true`
+终端显示宽字符（汉字、Emoji）时占用 2 列，但终端内部将其视为 2 个格子。
+如果新写入的文本只覆盖其中一半，另一半会成为"碎片"：
 
-普通字符（width=1）：
-- `isHead_=true,  isLong_=false`
+```
+写"Hello"→"你好"→覆盖时只覆盖"你"的左半…
+  屏幕: [你] [好]         ← 正常
+  写"X": [X] [好]         ← "你"的右半变成了碎片！
+```
 
-### 覆盖检测
+### 解决方案
 
-printText / fillRegion 写入前检查目标格子：
+写入前检测目标格子是否属于某个宽字符的尾部：
 
 ```cpp
-// 目标格子是某宽字符的尾部
+// 目标格子是宽字符的尾部（尾巴格子）
 if (!cell_p.isHead_ && cell_p.isLong_) {
-    // 清理头部（强制变为空格）
-    // 保留头部格子的原始 SGR（通过 sgr_id_ 迁移）
-    auto old_sid = buf_[idx - 1].sgr_id_;
-    reset_cell_(buf_[idx - 1]);
-    buf_[idx - 1].sgr_id_ = old_sid;
+    auto old_sid = buf_[idx - 1].sgr_id_;   // 保留颜色
+    reset_cell_(buf_[idx - 1]);              // 清空头部
+    buf_[idx - 1].sgr_id_ = old_sid;         // 恢复颜色
 }
 
-// 目标格子是某宽字符的头部
+// 目标格子是宽字符的头部（头格子）
 if (cell_p.isHead_ && cell_p.isLong_) {
-    // 清理尾部
-    auto old_sid = buf_[idx + 1].sgr_id_;
-    reset_cell_(buf_[idx + 1]);
-    buf_[idx + 1].sgr_id_ = old_sid;
+    auto old_sid = buf_[idx + 1].sgr_id_;   // 保留颜色
+    reset_cell_(buf_[idx + 1]);              // 清空尾部
+    buf_[idx + 1].sgr_id_ = old_sid;         // 恢复颜色
 }
 ```
 
-右边界放不下宽字符时，写入带当前风格的空格并继续。这是 ECMA-48 推荐的软换行行为。
+关键设计：碎片格填入**原始颜色**的空格。这样视觉上就像被"擦除"了，
+但颜色与周围一致。
 
-### 为什么保留原始 SGR
+### 边界溢出
 
-宽字符的碎片格（被覆盖一半的字符）在大多数终端模拟器中显示为"不应该出现的东西"。
-vatui 填充一个带**原始颜色**的空格，视觉上那个区域就像被"擦除"了，但颜色和周围一致。
-
----
-
-## 6. 颜色系统
-
-### 预计算 SGR
-
-```cpp
-// 用户调用 fg(Color4::GREEN)
-// → 立即执行 color::fg(Color4::GREEN)
-// → 返回 "\033[32m"  存入 Style::fg_sgr
-
-// 用户调用 bg(Rgb{255,100,50})
-// → 立即执行 color::bg(255,100,50)
-// → 返回 "\033[48;2;255;100;50m"  存入 Style::bg_sgr
-```
-
-### fillRegion 内部
-
-```cpp
-void fillRegion(FillArgs args) {
-    // 只做一次：三个 SGR 字符串拼接 + 驻留
-    uint32_t sid = intern_sgr_(
-        style.fg_sgr + style.bg_sgr + style.effects_sgr
-    );
-    // 循环内：只赋值 4 字节
-    for (每个格子) cell.sgr_id_ = sid;
-}
-```
-
-### 没有"颜色深度检测"
-
-之前的设计在 swap 时检测终端能力进行转换（C4→C8→C24 / 下行有损压缩）。
-现在的设计：
-- 用户在构造 Style 时调用 `fg(Color4::GREEN)`，立即转为 SGR 字符串
-- `terminal::detect_color_depth()` 不再被 vatui 核心调用
-- 如果用户想要不同的终端适配，在调用 `fg/bg` 之前检测终端，自行选择 | 这种做法把选择权交给用户
+如果宽字符写到屏幕最后一列放不下（比如宽字符在 79 列，需要 80 列），
+写入一个带当前风格的空格（软换行），继续处理后续内容。
 
 ---
 
-## 7. 输入解析
+## 6. 输入解析
 
-### input_buf_ 积累
+### 输入缓冲区
 
 `getInput()` 每次调用：
 1. 非阻塞读尽 stdin 所有可用字节，追加到 `input_buf_`
 2. 从 buffer 头部尝试解析一个完整的输入事件
 
-### 解析顺序（优先级）
+### 解析优先级（有限状态自动机）
 
 ```
-  ┌──────────────────────────────────┐
-  │ 0x1B + '[' + '<'   → SGR mouse  │  匹配 SGR 鼠标
-  │ 0x1B + '[' + ...   → CSI 序列    │  方向键/Home/End/Fn
-  │ 0x1B + 'O' + ...   → SS3 序列    │  F1-F4 (另一编码)
-  │ 0x1B + 0x20-0x7E  → Alt+key     │
-  │ 0x1B               → ESC         │
-  │ 0x09               → KEY_TAB     │
-  │ 0x0D               → KEY_ENTER   │
-  │ 0x7F               → BACKSPACE   │
-  │ 0x00               → Ctrl+Space  │
-  │ 0x01-0x1A          → Ctrl+a-z    │
-  │ 0x1C-0x1F          → Ctrl+\]_^   │
-  │ 0x20-0x7E          → ASCII       │
-  │ 0xC2-0xF7          → UTF-8 解码  │
-  └──────────────────────────────────┘
+字节序列               → 解析结果
+─────────────────────────────────────────────────────
+0x1B '[' '<' ... M/m  → SGR 鼠标事件
+0x1B '[' ... 字母     → CSI 序列（方向键/Home/End/Fn）
+0x1B 'O' ...          → SS3 序列（F1-F4 另一编码）
+0x1B + 0x20-0x7E      → Alt+key（\033a → Alt+a）
+0x1B                  → Escape
+─────────────────────────────────────────────────────
+0x09                  → Tab
+0x0D                  → Enter
+0x7F                  → Backspace
+0x00                  → Ctrl+Space（cp=' ', ctrl=true）
+0x01-0x1A             → Ctrl+a-z（cp='a'-'z', ctrl=true）
+0x1C-0x1F             → Ctrl+\]^_（cp='\\'']''^''_', ctrl=true）
+0x20-0x7E             → ASCII 可打印字符
+0xC2-0xF7 开头        → UTF-8 多字节解码 → char32_t
 ```
 
-### 不完整序列
+### 不完整序列处理
 
-如果 buffer 以 `\033[` 开头但尚未收到 terminator（0x40-0x7E），
-`getInput()` 返回 `nullopt`。`waitInput()` 用 `poll(fd, 50ms)` 轮询等待。
+CSI 序列以 `\033[` 开头，以 0x40-0x7E 范围内的字节结尾。
+如果 buffer 以 `\033[` 开头但还没收到终结字节，就保留在 buffer 中，
+下次调用继续等待。
 
-CSI 序列的最大长度没有硬限制，但 buffer 超过 128 字节时被清空（防洪水攻击）。
+安全上限：buffer 超过 128 字节时清空（防终端数据洪水攻击）。
 
-### Alt 键检测
+### Alt 与 Escape 的区分
 
-`\033<c>` 其中 `c` 为可打印字符（0x20-0x7E）。与 ESC 键的区别：
-- ESC = 裸 `\033` 后无跟随字节
-- Alt+key = `\033` 后紧跟一个可打印字符
+终端发送 Alt+a 时实际上发送 `\033a`（ESC + a）。
+与单独按 Escape 的区别：
+
+- Escape：裸 `\033`，没有后续字节。解析器返回 `Key{.code=KEY_ESC}`
+- Alt+a：`\033a`，解析器返回 `Key{.cp='a', .alt=true}`
+
+### 鼠标与键盘共存
+
+`enableMouse()` 发送的序列让终端把鼠标事件编码为 `\033[<...M/m`。
+输入解析器统一处理：
+1. 先匹配 `\033[<` → SGR 鼠标
+2. 再匹配 `\033[字母` → CSI 键盘
+3. 最后匹配 `\033 + 可打印` → Alt+key
+
+这样鼠标和键盘通过同一个 `getInput()` 获取。
+
+---
+
+## 7. VaTui 单例
+
+### 生命周期
+
+```cpp
+VaTui& VaTui::instance() {
+    static VaTui inst;    // C++11 起线程安全
+    return inst;
+}
+```
+
+构造函数：检测终端大小（`TIOCGWINSZ`），初始化 Framebuffer。
+**不进入 raw mode**——raw mode 由 `init()` 延迟进入。
+
+这样做的原因：
+- 用户可以在构造后查询 terminal 属性
+- 纯 buffer 操作（如单元测试）可以不调 `init()`
+- `init()` 是幂等的，多次调用无副作用
+
+析构函数：显示光标 → 清屏 → 恢复 termios。所有恢复都是自动的。
+
+### 线程安全
+
+Framebuffer 不是线程安全的——所有方法访问同一个 `buf_` 和 `sgr_pool_`。
+如果在多线程使用，需要外部加锁。
+
+VaTui 单例也不可重入——`getInput()` 读写 `input_buf_`。
+
+vaterm 层函数（`vaterm::color::*` 等）是线程安全的——纯函数，无全局状态。
 
 ---
 
@@ -315,65 +367,38 @@ CSI 序列的最大长度没有硬限制，但 buffer 超过 128 字节时被清
 
 ### 内存
 
-| 项 | 之前 (string) | 之后 (pool) |
-|----|--------------|-------------|
-| Cell 大小 | 40 B | 12 B |
-| 80×24 缓冲区 | 77 KB | 22 KB |
-| 池字符串数 | N/A | ~10-50 |
-| out_buf_ | 每次新建 | 复用保留 4 KB |
+| 项 | 容量 |
+|----|------|
+| Cell 大小 | 12 B |
+| 80×24 缓冲区 | 22 KB |
+| 池典型大小 | 10–50 条字符串 |
+| out_buf_ 容量 | 约 4 KB（复用） |
 
 ### 时间复杂度
 
-| 操作 | 之前 | 之后 |
-|------|------|------|
-| fillRegion (同色 N 格) | N × string 赋值 | 1 次 intern + N × uint32_t 赋值 |
-| swap (N 格, S 种风格) | S 次风格比较 + 可能转换 | S 次 uint32_t 比较 |
-| clear (N 格) | N × string 赋值 | N × uint32_t 赋值 |
+| 操作 | 成本 |
+|------|------|
+| `fillRegion`（N 格，同色） | 1 次 intern（拼接+池搜）+ N × uint32_t 赋值 |
+| `swap`（N 格，S 种色） | S 次 uint32_t 比较 + 输出字符串 |
+| `clear`（N 格） | N × uint32_t 赋值 |
+| 一次 intern | ~1 次 string 拼接 + ～10 次 string 比较（命中时） |
 
-### 运行开销
+### 为什么这么快
 
-一次 `intern_sgr_` 的成本 ~ 1 次 string concat + 池内线性搜。
-在典型的应用中（~10 种风格），池搜基本命中，只是几次 string 比较。
-
----
-
-## 9. VaTui 单例
-
-### Meyer's Singleton
-
-```cpp
-VaTui& VaTui::instance() {
-    static VaTui inst;
-    return inst;
-}
-```
-
-C++11 起线程安全的函数局部静态变量初始化。
-构造函数自动检测终端大小（`TIOCGWINSZ`），设定 Framebuffer 尺寸。
-
-### 延迟初始化
-
-构造函数**不进入 raw mode**——raw mode 由 `init()` 进入。这样设计：
-- 用户可以在构造后检查 terminal 属性
-- 如果用户只需要 buffer（例如单元测试），可以不调 `init()`
-- `init()` 是幂等的：多次调用只第一次实际生效
-
-### 析构
-
-`~VaTui()` 依赖 `~terminal()` 的 RAII：
-- 显示光标 → 清屏 → 恢复 termios
-- 不需要用户手动调用销毁
+关键路径上没有颜色转换、没有字符串比较、没有动态内存分配。
+`swap()` 内部最重的操作是 `out_buf_ += data_`（追加单字符到 string），
+而这在 SSO 范围内时只是 memcpy 几个字节。
 
 ---
 
-## 10. 文件组织
+## 9. 文件组织
 
 | 文件 | 内容 |
 |------|------|
 | `tui-utils/include/vatui.hpp` | 类声明：Style、Framebuffer、VaTui、参数结构体 |
-| `src/utils/vatui.cpp` | 实现：Framebuffer 方法、VaTui 方法 |
+| `src/utils/vatui.cpp` | 实现：Framebuffer 方法、VaTui 方法、输入解析器 |
 | `test/tui/print.cpp` | CJK 文字+WASD 覆盖测试 |
-| `test/tui/paint.cpp` | 鼠标画板 |
+| `test/tui/paint.cpp` | 鼠标画板（全部键事件演示） |
 | `test/tui/color.cpp` | 三档颜色色块检测 |
 | `doc/dev/vaterm.md` | vaterm 层实现思路 |
 | `doc/man/vatui.md` | vatui 用户手册 |

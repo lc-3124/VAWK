@@ -32,13 +32,13 @@
 
 | 模块 | 命名空间 / 类 | 功能 |
 |------|---------------|------|
-| `enums.hpp` | `vaterm` | 枚举定义：`Color4`, `CursorDir`, `CursorShape`, `TextEffect`, `Rgb` |
-| `color.hpp` | `vaterm::color` | ANSI 颜色控制：4bit/256bit/RGB 颜色设置、文字特效、颜色空间转换与混合 |
+| `enums.hpp` | `vaterm` | 枚举定义：`Color4`, `Color8`, `ColorDepth`, `Rgb`, `CursorDir`, `CursorShape`, `TextEffect` |
+| `color.hpp` | `vaterm::color` | ANSI 颜色控制：4bit/8bit/24bit 颜色设置、文字特效、颜色空间转换与混合 |
 | `cursor.hpp` | `vaterm::cursor` | 光标控制：移动、定位、显示/隐藏、形状设置 |
 | `term.hpp` | `vaterm::terminal` | 终端管理：raw mode、屏幕清空、终端大小、I/O |
 | `system.hpp` | `vaterm::sys` | 系统信息：用户名、主机名、环境变量、当前目录 |
 | `utf.hpp` | `vaterm::utf` | UTF-8 处理：字符宽度、字节计数、字符串遍历 |
-| `vatui.hpp` | `vatui::Framebuffer` + `vatui::VaTui` | 帧缓冲引擎（`Framebuffer`：双缓冲单元格矩阵、差异渲染、宽字符保护）；单例 `VaTui`（`getInput`/`waitInput`/`enableMouse`） |
+| `vatui.hpp` | `vatui::Framebuffer` + `vatui::VaTui` | 帧缓冲引擎（`Framebuffer`：双缓冲单元格矩阵、SGR 池差异渲染、宽字符保护）；单例 `VaTui`（`getInput`/`waitInput`/`enableMouse`） |
 
 ## 🚀 快速开始
 

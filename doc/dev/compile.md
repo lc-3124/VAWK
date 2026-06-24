@@ -2,15 +2,17 @@
 
 ## Makefile 体系
 
-项目包含三层 Makefile，各司其职：
+项目包含多层 Makefile：
 
 ```
 VAWK/
 ├── Makefile              # 顶层入口
 ├── test/
 │   ├── Makefile          # 递归调度器，自动遍历子目录
+│   ├── tui/
+│   │   └── Makefile      # vatui 测试程序（print / paint / color）
 │   └── utils/
-│       └── Makefile      # 实际编译规则
+│       └── Makefile      # vaterm 测试程序（sys_demo / utf_demo）
 ```
 
 ### 1. 顶层 Makefile (`VAWK/Makefile`)
@@ -19,7 +21,8 @@ VAWK/
 
 | 目标 | 功能 |
 |------|------|
-| `make` / `make all` | 项目为 header-only，提示使用 `make check` |
+| `make` / `make all` | 提示使用 `make check`（项目为 header-only） |
+| `make lib` | 编译 `src/utils/vatui.cpp` → `build/bin.o/vatui.o` |
 | `make check` | 语法检查所有头文件（`-fsyntax-only -x c++-header`） |
 | `make test` | 委托给 `test/`，编译所有测试程序 |
 | `make clean` | 清理 `build/` + 委托 `test/` 清理 |
@@ -38,27 +41,34 @@ INC_FLAGS := -Iinclude -Itui-utils/include
 
 ```makefile
 SUB_DIRS := $(wildcard */.)
-
 $(SUB_DIRS):
     $(MAKE) -C $@ $(MAKECMDGOALS)
 ```
 
 **扩展方式**：在 `test/` 下创建新子目录（如 `test/foo/`），放入自己的 Makefile，顶层自动拾取。
 
-### 3. 测试程序 Makefile (`VAWK/test/utils/Makefile`)
+### 3. vatui 测试 Makefile (`VAWK/test/tui/Makefile`)
 
-**作用**：编译 5 个测试 demo。
+编译 3 个需要终端的交互式测试程序：
+
+| 目标 | 说明 |
+|------|------|
+| `color` | 4-bit / 8-bit / 24-bit 色块渲染检测 |
+| `print` | CJK 文字渲染 + 宽字符保护 + WASD 叠加覆盖 |
+| `paint` | 鼠标画板：绘制、擦除、按键显示、状态栏 |
+
+所有目标链接 `../../build/bin.o/vatui.o`（即 `make lib` 必须先执行）。
+
+### 4. vaterm 测试 Makefile (`VAWK/test/utils/Makefile`)
+
+编译不需要终端的纯逻辑测试：
 
 | 目标 | 功能 |
 |------|------|
-| `make all` | 编译所有 5 个 demo |
+| `make all` | 编译 sys_demo + utf_demo |
 | `make check` | 运行非交互式测试（sys_demo + utf_demo） |
-| `make clean` | 删除编译产物 |
 
-编译时头文件路径：
-```makefile
-INC_FLAGS := -I../../tui-utils/include
-```
+头文件路径：`-I../../tui-utils/include`
 
 ---
 
@@ -67,10 +77,13 @@ INC_FLAGS := -I../../tui-utils/include
 ### 日常开发
 
 ```bash
+# 0. 首次使用需要编译 lib
+make lib
+
 # 1. 语法检查所有头文件（修改头文件后必须执行）
 make check
 
-# 2. 编译所有测试（验证 .cpp 能正确链接头文件）
+# 2. 编译所有测试
 make test
 
 # 3. 运行非交互式测试
@@ -83,14 +96,24 @@ make clean
 ### 运行交互式 Demo
 
 ```bash
-# 颜色演示（管道安全）
-./test/utils/color_demo | less -R
+# vatui 测试（需 tty）
+./test/tui/color            # 颜色色块检测
+./test/tui/print            # CJK 文字 + WASD 覆盖
+./test/tui/paint            # 鼠标画板
 
-# 光标演示（需 tty）
-./test/utils/cursor_demo
+# vaterm 测试（管道安全，无需 tty）
+./test/utils/sys_demo       # 系统信息输出
+./test/utils/utf_demo       # UTF-8 宽度测试
+```
 
-# 终端控制演示（需 tty）
-./test/utils/term_demo
+---
+
+## 编译 vatui 应用
+
+```bash
+make lib                              # 编译 vatui.o
+g++ --std=c++23 -Iinclude -Itui-utils/include \
+    myapp.cpp build/bin.o/vatui.o -o myapp
 ```
 
 ---
@@ -101,7 +124,7 @@ make clean
 
 ### 使用 compiledb
 
-项目使用 [compiledb](https://github.com/nickdiego/compiledb) 工具从 Makefile 构建日志生成数据库。
+项目使用 [compiledb](https://github.com/nickdiego/compiledb) 从 Makefile 构建日志生成数据库。
 
 ```bash
 # 安装
@@ -116,11 +139,11 @@ python3 contrib/gen_compdb.py
 
 ### 文件结构
 
-`compile_commands.json` 包含 21 个条目：
+`compile_commands.json` 包含以下条目：
 
 | 条目类型 | 数量 | 示例 |
 |----------|------|------|
-| 测试 .cpp | 5 | `test/utils/color_demo.cpp` |
+| 测试 .cpp | 5 | `test/tui/color.cpp`, `test/utils/utf_demo.cpp` |
 | 框架头文件 | 10 | `include/vawk/event.hpp` |
 | 工具头文件 | 6 | `tui-utils/include/vaterm/color.hpp` |
 
@@ -130,7 +153,6 @@ python3 contrib/gen_compdb.py
 
 验证 clangd 工作正常：
 ```bash
-# 检查 clangd 能否解析头文件
 clangd --check=include/vawk/event.hpp
 ```
 
@@ -152,5 +174,5 @@ python3 contrib/gen_compdb.py
 |------|------|------|
 | `g++` (≥14) | C++23 编译器 | `pacman -S gcc` |
 | `make` | 构建系统 | `pacman -S make` |
-| `compiledb` | 生成 compile_commands.json | `pip install compiledb` |
-| `clangd` | LSP 语言服务器 | `pacman -S clang` |
+| `compiledb` (可选) | 生成 compile_commands.json | `pip install compiledb` |
+| `clangd` (可选) | LSP 语言服务器 | `pacman -S clang` |

@@ -2,8 +2,36 @@
 
 > vatui 是构建在 vaterm 之上的帧缓冲与输入封装库。
 > 提供双缓冲单元格矩阵（1:1 映射到终端屏幕），
-> 支持 4-bit / 8-bit / 24-bit 三种颜色深度自动适配，
+> 支持 4-bit / 8-bit / 24-bit 三种颜色深度，
 > 以及统一的鼠标/键盘输入。
+
+## 核心概念
+
+### 终端只认字符串
+
+终端模拟器（xterm, foot, kitty 等）本质上是一个文本渲染器。
+你不能"设置颜色"——你只能**输出特定的字符串**，终端看到后才会改变颜色。
+
+比如输出 `"\033[31m"` 之后，接下来的文字就会变成红色。
+这种字符串叫 **SGR 序列**（Select Graphic Rendition）。
+
+### 预计算（Pre-computation）
+
+vatui 把颜色的转换放在**写入缓冲区的时刻**，而不是**输出到终端的时刻**：
+
+```
+用户构造 Style          → 立即转成 SGR 字符串  ✓（此时做颜色转换）
+调用 fillRegion / swap  → 只做整数比较，直接输出  ✓（零转换）
+```
+
+这样 `swap()` 中只有整数比较和字符串拼接，没有任何颜色计算。
+即便每帧刷新整个屏幕，开销也极低。
+
+### 颜色选择交给用户
+
+终端的能力各不相同：有些只支持 16 色，有些支持 256 色，有些支持真彩色。
+vatui 不自动检测也不做转换——你在调用 `fg()` 之前选好颜色类型就行。
+可以用 `terminal::detect_color_depth()` 查询终端能力作为参考。
 
 ---
 
@@ -20,7 +48,8 @@ int main() {
 
     auto& fb = tui.buffer();
     fb.printText({.col = 0, .row = 0, .text = "Hello, 世界！",
-                  .style = {.fg = Color4::BRIGHT_GREEN, .bg = Color4::BLUE}});
+                  .style = {.fg_sgr = fg(Color4::BRIGHT_GREEN),
+                            .bg_sgr = bg(Color4::BLUE)}});
     fb.swap();
 
     tui.waitInput();
@@ -69,7 +98,8 @@ void fillRegion(FillArgs args);  // 填充矩形区域
 
 ```cpp
 fb.printText({.col = 0, .row = 0, .text = "你好",
-              .style = {.fg = Rgb{255, 100, 50}, .bg = Color4::BLACK}});
+              .style = {.fg_sgr = fg(Rgb{255, 100, 50}),
+                        .bg_sgr = bg(Color4::BLACK)}});
 ```
 
 ### 输出
@@ -83,7 +113,7 @@ void swap();
 
 ### 宽字符保护
 
-当新文本覆盖到宽字符的尾部（`isLong=true`）或头部时，
+当新文本覆盖到宽字符的尾部（`isLong_=true`）或头部时，
 自动清理对应的另一半，并用**原始颜色**的空格填充碎片区域。
 右边界放不下宽字符时，写入带当前风格的空格并继续。
 
@@ -91,64 +121,89 @@ void swap();
 
 ## 颜色系统
 
-vatui 支持三种颜色深度，可在 `Style` 中混用：
+### Style 描述符
+
+`Style` 的三个字段直接存储预计算好的 SGR 字符串：
+
+```cpp
+struct Style {
+    std::string fg_sgr      = "\033[37m";   // 前景 SGR（默认白）
+    std::string bg_sgr      = "\033[40m";   // 背景 SGR（默认黑）
+    std::string effects_sgr;                 // 特效 SGR（默认无）
+};
+```
+
+通过 `fg()` / `bg()` / `effects()` 三个辅助函数构造 SGR 字符串，
+它们立即调用对应的 `vaterm::color` 函数并返回。
+
+```cpp
+// 四种颜色类型
+Style{.fg_sgr = fg(Color4::GREEN)}              // 4-bit 调色板
+Style{.fg_sgr = fg(Color8{46})}                  // 8-bit 256 色调色板
+Style{.fg_sgr = fg(Rgb{0, 255, 0})}             // 24-bit 真彩色
+Style{.fg_sgr = fg(Color4::BRIGHT_RED),          // 混用
+      .bg_sgr = bg(Color8{196}),
+      .effects_sgr = effects({TextEffect::BOLD, TextEffect::UNDERLINE})}
+```
+
+### fg / bg / effects 辅助函数
+
+```cpp
+// 前景色
+std::string fg(Color4 c);    // 4-bit
+std::string fg(Color8 c);    // 8-bit 256 色索引
+std::string fg(Rgb c);       // 24-bit 真彩色
+
+// 背景色
+std::string bg(Color4 c);
+std::string bg(Color8 c);
+std::string bg(Rgb c);
+
+// 特效（可组合）
+std::string effects(std::initializer_list<TextEffect> effects);
+```
+
+### 颜色类型
 
 | 类型 | 示例 | 说明 |
 |------|------|------|
 | `Color4` | `Color4::BRIGHT_RED` | 16 色 ANSI 调色板 |
-| `Color8` | `Color8{196}` | 256 色调色板索引 (0-255) |
+| `Color8` | `Color8{196}` | 256 色调色板索引 (0–255) |
 | `Rgb` | `Rgb{255, 100, 50}` | 24-bit 真彩色 |
 
-```cpp
-// 三种风格等价使用
-Style{.fg = Color4::GREEN}              // 4-bit
-Style{.fg = Color8{46}}                 // 8-bit
-Style{.fg = Rgb{0, 255, 0}}            // 24-bit
-```
+### 颜色深度检测
 
-### 自动深度适配
-
-`swap()` 时自动检测终端能力，把颜色转换到终端原生深度：
-
-| 终端能力 | 下行转换 | 上行转换 |
-|----------|----------|----------|
-| C24 (truecolor) | — | C4 → C24 查 `_256_to_rgb`，C8 → C24 查 `_256_to_rgb` |
-| C8 (256色) | C24 → `rgb_to_256` | C4 → `_4_to_256` |
-| C4 (16色) | C24 → `nearest_4bit`，C8 → 先 `_256_to_rgb` 再 `nearest_4bit` | — |
-
-检测规则：`$COLORTERM=truecolor/24bit` → C24，
-`$TERM=*-256color` → C8，否则 C4。
-
----
-
-## Style 描述符
+vatui 核心不做自动颜色转换。但 `terminal::detect_color_depth()` 可帮助
+用户在调用 `fg()/bg()` 之前选择合适深度：
 
 ```cpp
-struct Style {
-    Color fg;                                          // 前景色
-    Color bg;                                          // 背景色
-    std::vector<TextEffect> effects;                   // 特效
-};
+auto depth = terminal::detect_color_depth();
+// depth == ColorDepth::C24 → 可用 Rgb
+// depth == ColorDepth::C8  → 推荐 Color8
+// depth == ColorDepth::C4  → 推荐 Color4
 ```
 
-`Color` 可隐式从 `Color4`、`Color8`、`Rgb` 构造。`TextEffect` 值：
-
-| 枚举 | 效果 |
-|------|------|
-| `BOLD` | 粗体 |
-| `DIM` | 暗色 |
-| `ITALIC` | 斜体 |
-| `UNDERLINE` | 下划线 |
-| `SLOW_BLINK` | 慢闪 |
-| `RAPID_BLINK` | 快闪 |
-| `REVERSE` | 反转 |
-| `CONCEAL` | 隐藏 |
-| `STRIKETHROUGH` | 删除线 |
-
-```cpp
-Style{.fg = Color4::GREEN, .bg = Color4::BLACK,
-      .effects = {TextEffect::BOLD, TextEffect::UNDERLINE}};
+检测规则：
 ```
+$COLORTERM=truecolor / 24bit  ──→ C24
+$TERM=xterm-kitty / alacritty / foot  ──→ C24
+$TERM=*-256color  ──→ C8
+否则 ──→ C4
+```
+
+### TextEffect 特效
+
+| 枚举 | 效果 | SGR 码 |
+|------|------|--------|
+| `BOLD` | 粗体 | 1 |
+| `DIM` | 暗色 | 2 |
+| `ITALIC` | 斜体 | 3 |
+| `UNDERLINE` | 下划线 | 4 |
+| `SLOW_BLINK` | 慢闪 | 5 |
+| `RAPID_BLINK` | 快闪 | 6 |
+| `REVERSE` | 反转 | 7 |
+| `CONCEAL` | 隐藏 | 8 |
+| `STRIKETHROUGH` | 删除线 | 9 |
 
 ---
 
@@ -157,7 +212,7 @@ Style{.fg = Color4::GREEN, .bg = Color4::BLACK,
 ### Key 键盘事件
 
 ```cpp
-enum KeyCode {
+enum KeyCode : int {
     KEY_NONE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
     KEY_HOME, KEY_END, KEY_PGUP, KEY_PGDN, KEY_INS, KEY_DEL,
     KEY_F1, ..., KEY_F12,
@@ -165,37 +220,37 @@ enum KeyCode {
 };
 
 struct Key {
-    char32_t cp   = 0;    // Unicode 码点（可打印字符）
-    KeyCode  code = KEY_NONE;  // 特殊键
-    bool     alt  = false; // Alt 修饰
-    bool     ctrl = false; // Ctrl 修饰
+    char32_t cp   = 0;       // Unicode 码点（可打印字符）
+    KeyCode  code = KEY_NONE; // 特殊键
+    bool     alt  = false;   // Alt 修饰
+    bool     ctrl = false;   // Ctrl 修饰
 };
 ```
 
 支持的组合键：
-- Ctrl+@/Space (NUL) → `cp=' '` + `ctrl=true`
-- Ctrl+a–z → `cp='a'…'z'` + `ctrl=true`
-- Ctrl+\\, ], ^, \_ → 对应字符 + `ctrl=true`
-- Alt+x → `cp=x` + `alt=true`
+- `Ctrl+@` / `Ctrl+Space` (0x00) → `cp=' '` + `ctrl=true`
+- `Ctrl+a–z` (0x01–0x1A) → `cp='a'…'z'` + `ctrl=true`
+- `Ctrl+\`, `]`, `^`, `_` (0x1C–0x1F) → 对应字符 + `ctrl=true`
+- `Alt+x` → `cp=x` + `alt=true`
 - 方向键、Home/End、PgUp/PgDn、Insert/Delete、F1–F12 → `code` 对应值
 
 ### Mouse 鼠标事件
 
 ```cpp
 struct MouseState {
-    enum Button { NONE, LEFT, MIDDLE, RIGHT };
-    enum Action { PRESS, RELEASE, DRAG, SCROLL_UP, SCROLL_DOWN };
+    enum Button : uint8_t { NONE, LEFT, MIDDLE, RIGHT };
+    enum Action : uint8_t { RELEASE, PRESS, DRAG, SCROLL_UP, SCROLL_DOWN };
     Button  button;
     Action  action;
-    int     col;  // 0-based
-    int     row;  // 0-based
+    int     col;   // 0-based
+    int     row;   // 0-based
 };
 ```
 
 ### Input 统一事件
 
 ```cpp
-enum InputType { INPUT_KEY = 0, INPUT_MOUSE = 1 };
+enum InputType : int { INPUT_KEY = 0, INPUT_MOUSE = 1 };
 
 struct Input {
     InputType          type;
@@ -208,7 +263,6 @@ Input                waitInput();  // 阻塞（50ms poll 轮询）
 ```
 
 使用示例：
-
 ```cpp
 auto inp = tui.waitInput();
 if (inp.type == INPUT_MOUSE) {
@@ -222,7 +276,6 @@ if (inp.type == INPUT_MOUSE) {
 ```
 
 鼠标需要显式启用：
-
 ```cpp
 tui.enableMouse();
 // ... 事件循环 ...
@@ -256,6 +309,15 @@ void   Framebuffer::clearRegion(RegionArgs);
 void   Framebuffer::fillRegion(FillArgs);
 void   Framebuffer::swap();
 
+// vatui helper functions
+std::string fg(Color4);
+std::string fg(Color8);
+std::string fg(Rgb);
+std::string bg(Color4);
+std::string bg(Color8);
+std::string bg(Rgb);
+std::string effects(std::initializer_list<TextEffect>);
+
 // 参数结构体（均 support designated initialisers）
 SizeArgs     { int col, row; }
 PositionArgs { int col, row; }
@@ -282,9 +344,16 @@ int main() {
     tui.enableMouse();
     auto& fb = tui.buffer();
 
-    Style blue  = {.fg = Color4::WHITE, .bg = Color4::BRIGHT_BLUE};
-    Style erase = {.fg = Color4::WHITE, .bg = Color4::BLACK};
+    Style blue  = {.fg_sgr = fg(Color4::WHITE), .bg_sgr = bg(Color4::BRIGHT_BLUE)};
+    Style erase = {.fg_sgr = fg(Color4::WHITE), .bg_sgr = bg(Color4::BLACK)};
     Style draw  = blue;
+    Style sb    = {.fg_sgr = fg(Color4::BLACK), .bg_sgr = bg(Color4::BRIGHT_WHITE)};
+
+    // 状态栏
+    fb.fillRegion({0, fb.getRowMax() - 1, fb.getColMax(), 1, ' ', sb});
+    fb.printText({.col = 0, .row = fb.getRowMax() - 1,
+                  .text = "左键画 右键擦 ESC=q", .style = sb});
+    fb.swap();
 
     bool quit = false;
     while (!quit) {
@@ -301,6 +370,8 @@ int main() {
 
         if (ev.type == INPUT_KEY && ev.key.cp == 'q')
             quit = true;
+        if (ev.type == INPUT_KEY && ev.key.code == KEY_ESC)
+            quit = true;
 
         fb.swap();
     }
@@ -310,3 +381,40 @@ int main() {
 ### 颜色检测（test/tui/color.cpp）
 
 运行 `./test/tui/color` 查看终端对各颜色深度（4-bit / 8-bit / 24-bit）的支持情况。
+
+---
+
+## 构建
+
+```bash
+# 编译 lib
+make lib
+
+# 语法检查所有头文件
+make check
+
+# 编译测试
+make -C test/tui all
+
+# 运行非交互测试
+make -C test/tui check
+```
+
+链接：
+```bash
+g++ --std=c++23 -Iinclude -Itui-utils/include myapp.cpp build/bin.o/vatui.o -o myapp
+```
+
+---
+
+## 常见问题
+
+**Q: swap() 后屏幕无变化？**
+A: 检查是否调用了 `tui.init()`。`VaTui` 构造函数不会进入 raw mode。
+
+**Q: 颜色显示不对？**
+A: 终端可能不支持真彩色。调用 `terminal::detect_color_depth()` 检测终端能力，
+选择适当的 `fg()` 重载。
+
+**Q: 鼠标事件收不到？**
+A: 需要先调用 `tui.enableMouse()`。确保终端支持 SGR 鼠标（xterm, foot, kitty 等）。
