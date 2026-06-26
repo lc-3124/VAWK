@@ -42,12 +42,11 @@ struct MouseState {
     int col = 0;   // 1-based column
 
     // Which physical button (or none for scroll events).
-    enum Button : uint8_t { NONE, LEFT, MIDDLE, RIGHT };
+    enum class Button : uint8_t { NONE, LEFT, MIDDLE, RIGHT };
     // What kind of action occurred.
-    enum Action : uint8_t { RELEASE, PRESS, DRAG, SCROLL_UP, SCROLL_DOWN };
-
-    Button button = NONE;
-    Action action = RELEASE;
+    enum class Action : uint8_t { RELEASE, PRESS, DRAG, SCROLL_UP, SCROLL_DOWN };
+    Button button = Button::NONE;
+    Action action = Action::RELEASE;
 };
 
 // SGR mouse event tracker.
@@ -159,26 +158,26 @@ inline std::optional<MouseState> mouse::parse(std::string_view seq) {
 
     // Map the two-button bitfield to our Button enum.
     auto to_btn = [](uint8_t b) -> MouseState::Button {
-        return b == 0 ? MouseState::LEFT
-             : b == 1 ? MouseState::MIDDLE
-             : b == 2 ? MouseState::RIGHT
-             : MouseState::NONE;
+        return b == 0 ? MouseState::Button::LEFT
+             : b == 1 ? MouseState::Button::MIDDLE
+             : b == 2 ? MouseState::Button::RIGHT
+             : MouseState::Button::NONE;
     };
 
     switch (atype) {
     case 0:
         // Normal press / release.
         // Terminator 'm' or button=3 implies release; otherwise press.
-        ms.action = (term == 'm' || btn == 3) ? MouseState::RELEASE : MouseState::PRESS;
+        ms.action = (term == 'm' || btn == 3) ? MouseState::Action::RELEASE : MouseState::Action::PRESS;
         ms.button = to_btn(btn);
         break;
     case 1:
         // Drag with a button held.
-        ms.action = MouseState::DRAG;
+        ms.action = MouseState::Action::DRAG;
         ms.button = to_btn(btn);
         break;
-    case 2: ms.action = MouseState::SCROLL_UP;   ms.button = MouseState::NONE; break;
-    case 3: ms.action = MouseState::SCROLL_DOWN; ms.button = MouseState::NONE; break;
+    case 2: ms.action = MouseState::Action::SCROLL_UP;   ms.button = MouseState::Button::NONE; break;
+    case 3: ms.action = MouseState::Action::SCROLL_DOWN; ms.button = MouseState::Button::NONE; break;
     }
     return ms;
 }

@@ -44,13 +44,8 @@ class Entity {
     // The event will later be delivered via on_event().
     void push_event(std::shared_ptr<event::Base> evt);
 
-    // Dequeue and deliver one event.
-    //
-    // Returns:
-    //    1  — event was dequeued and delivered
-    //    0  — event was null (discarded)
-    //   -1  — buffer was empty
-    int process_one_event();
+    enum class ProcessResult { Processed, Discarded, Empty };
+    ProcessResult process_one_event();
 
     // ── Subscription helpers ────────────────────────────────────────────
 

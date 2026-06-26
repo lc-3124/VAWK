@@ -199,10 +199,10 @@ int main() {
     // ── Wait for Q / Escape ───────────────────────────────────────────
     while (true) {
         auto inp = tui.waitInput();
-        if (inp.type == INPUT_KEY) {
+        if (inp.type == InputType::KEY) {
             auto& k = inp.key;
-            if ((k.code == KEY_NONE && (k.cp == 'q' || k.cp == 'Q'))
-                || k.code == KEY_ESC)
+            if ((k.code == KeyCode::NONE && (k.cp == 'q' || k.cp == 'Q'))
+                || k.code == KeyCode::ESC)
                 break;
         }
     }

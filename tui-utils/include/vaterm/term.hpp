@@ -27,6 +27,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <termios.h>
@@ -181,13 +182,12 @@ class terminal {
     }
 
     // Read one byte from stdin without blocking.
-    // In raw mode (VMIN=0, VTIME=1) this returns -1 after 100 ms if
+    // In raw mode (VMIN=0, VTIME=1) this returns nullopt after 100 ms if
     // no data is available.
-    // Returns the byte value (0-255) on success, or -1 on error/timeout.
-    static int read_byte() {
+    static std::optional<unsigned char> read_byte() {
         unsigned char c;
         auto n = ::read(STDIN_FILENO, &c, 1);
-        if (n <= 0) return -1;
+        if (n <= 0) return std::nullopt;
         return c;
     }
 

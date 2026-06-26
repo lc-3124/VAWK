@@ -64,39 +64,39 @@ int main() {
     while (!quit) {
         auto inp = tui.waitInput();
 
-        if (inp.type == INPUT_MOUSE) {
+        if (inp.type == InputType::MOUSE) {
             auto& m = inp.mouse;
 
             // Select style based on button.
-            if (m.button == MouseState::LEFT)   style_draw = style_blue;
-            if (m.button == MouseState::RIGHT)  style_draw = style_red;
-            if (m.button == MouseState::MIDDLE) style_draw = style_erase;
+            if (m.button == MouseState::Button::LEFT)   style_draw = style_blue;
+            if (m.button == MouseState::Button::RIGHT)  style_draw = style_red;
+            if (m.button == MouseState::Button::MIDDLE) style_draw = style_erase;
 
             // Paint on press or drag, skip status area.
-            if ((m.action == MouseState::PRESS || m.action == MouseState::DRAG) &&
+            if ((m.action == MouseState::Action::PRESS || m.action == MouseState::Action::DRAG) &&
                 m.row >= 0 && m.row < status_row && m.col >= 0 && m.col < cols) {
                 paint_cell(m.col, m.row, style_draw);
             }
 
-            if (m.action == MouseState::SCROLL_UP) {
+            if (m.action == MouseState::Action::SCROLL_UP) {
                 fb.clear();
             }
 
             // Build status bar text.
-            auto btn_name = m.button == MouseState::LEFT   ? "L"
-                          : m.button == MouseState::RIGHT  ? "R"
-                          : m.button == MouseState::MIDDLE ? "M" : "-";
-            auto act_name = m.action == MouseState::PRESS       ? "Press"
-                          : m.action == MouseState::RELEASE     ? "Release"
-                          : m.action == MouseState::DRAG        ? "Drag"
-                          : m.action == MouseState::SCROLL_UP   ? "ScrollUp"
-                          : m.action == MouseState::SCROLL_DOWN ? "ScrollDn" : "";
+            auto btn_name = m.button == MouseState::Button::LEFT   ? "L"
+                          : m.button == MouseState::Button::RIGHT  ? "R"
+                          : m.button == MouseState::Button::MIDDLE ? "M" : "-";
+            auto act_name = m.action == MouseState::Action::PRESS       ? "Press"
+                          : m.action == MouseState::Action::RELEASE     ? "Release"
+                          : m.action == MouseState::Action::DRAG        ? "Drag"
+                          : m.action == MouseState::Action::SCROLL_UP   ? "ScrollUp"
+                          : m.action == MouseState::Action::SCROLL_DOWN ? "ScrollDn" : "";
             status_text = "Mouse: (" + std::to_string(m.col) + "," +
                           std::to_string(m.row) + ") " + btn_name + " " +
                           act_name;
         }
 
-        if (inp.type == INPUT_KEY) {
+        if (inp.type == InputType::KEY) {
             auto& k = inp.key;
             std::string mod;
             if (k.ctrl) mod += "C-";
@@ -120,24 +120,24 @@ int main() {
                     "F7","F8","F9","F10","F11","F12",
                     "ESC","TAB","ENTER","BACKSPACE",
                 };
-                int idx = k.code - KEY_UP;
+                int idx = static_cast<int>(k.code) - static_cast<int>(KeyCode::UP);
                 if (idx >= 0 && static_cast<size_t>(idx) < sizeof names / sizeof names[0])
                     last_key_str = mod + names[idx];
             }
 
-            if (k.code == KEY_BACKSPACE) {
+            if (k.code == KeyCode::BACKSPACE) {
                 style_draw = style_erase;
-            } else if (k.code == KEY_ENTER) {
+            } else if (k.code == KeyCode::ENTER) {
                 style_draw = style_blue;
                 last_key_str += " (ok)";
             }
 
-            if (k.code == KEY_NONE && k.cp == 'u' && k.ctrl) {
+            if (k.code == KeyCode::NONE && k.cp == 'u' && k.ctrl) {
                 fb.clear();
             }
 
-            if ((k.code == KEY_NONE && (k.cp == 'q' || k.cp == 'Q'))
-                || k.code == KEY_ESC) {
+            if ((k.code == KeyCode::NONE && (k.cp == 'q' || k.cp == 'Q'))
+                || k.code == KeyCode::ESC) {
                 quit = true;
             }
         }

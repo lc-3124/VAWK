@@ -21,14 +21,16 @@
 
 #include "event_upstream.hpp"
 
+#include <optional>
+
 namespace vawk {
 
 // Forward-declared event types.
 
 // Emitted when a mouse button is pressed, released, or dragged.
 VAWK_EVENT_DEFINE(MouseClickEvent)
-    float x, y;         // normalised or cell coordinates
-    int   duration = -1; // time since last press (ms), -1 = unknown
+    float x, y;                   // normalised or cell coordinates
+    std::optional<int> duration;  // time since last press (ms), nullopt = unknown
 VAWK_EVENT_DEFINE_END
 
 // Input handler.

@@ -87,15 +87,15 @@ int main() {
         auto& s = *state;
 
         // Draw at the reported position.
-        if (s.action == MouseState::DRAG || s.action == MouseState::PRESS) {
-            auto fg = (s.button == MouseState::LEFT)  ? color::fg(0, 100, 255)
-                    : (s.button == MouseState::RIGHT) ? color::fg(255, 50, 50)
+        if (s.action == MouseState::Action::DRAG || s.action == MouseState::Action::PRESS) {
+            auto fg = (s.button == MouseState::Button::LEFT)  ? color::fg(0, 100, 255)
+                    : (s.button == MouseState::Button::RIGHT) ? color::fg(255, 50, 50)
                     : color::fg(Color4::BRIGHT_BLACK);
             terminal::write(cursor::move_to(s.row, s.col));
             terminal::write(fg + "*" + color::reset());
         }
 
-        if (s.action == MouseState::SCROLL_UP)
+        if (s.action == MouseState::Action::SCROLL_UP)
             terminal::write(terminal::clear_screen());
 
         // Info line at the bottom.
@@ -103,15 +103,15 @@ int main() {
                         color::fg(Color4::BRIGHT_BLACK) +
                         "(" + std::to_string(s.col) + "," +
                         std::to_string(s.row) + ")  " +
-                        ((s.button == MouseState::LEFT)  ? "Left" :
-                         (s.button == MouseState::RIGHT) ? "Right" :
-                         (s.button == MouseState::MIDDLE) ? "Middle" : "-") +
+                        ((s.button == MouseState::Button::LEFT)  ? "Left" :
+                         (s.button == MouseState::Button::RIGHT) ? "Right" :
+                         (s.button == MouseState::Button::MIDDLE) ? "Middle" : "-") +
                         " " +
-                        ((s.action == MouseState::PRESS)      ? "Press" :
-                         (s.action == MouseState::RELEASE)    ? "Release" :
-                         (s.action == MouseState::DRAG)       ? "Drag" :
-                         (s.action == MouseState::SCROLL_UP)  ? "Scroll Up" :
-                         (s.action == MouseState::SCROLL_DOWN) ? "Scroll Down" : "") +
+                        ((s.action == MouseState::Action::PRESS)      ? "Press" :
+                         (s.action == MouseState::Action::RELEASE)    ? "Release" :
+                         (s.action == MouseState::Action::DRAG)       ? "Drag" :
+                         (s.action == MouseState::Action::SCROLL_UP)  ? "Scroll Up" :
+                         (s.action == MouseState::Action::SCROLL_DOWN) ? "Scroll Down" : "") +
                         color::reset());
         terminal::flush();
     }

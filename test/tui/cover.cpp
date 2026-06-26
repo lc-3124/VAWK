@@ -143,9 +143,9 @@ int main() {
         fb.swap();
 
         auto ev = tui.waitInput();
-        if (ev.type == INPUT_KEY) {
+        if (ev.type == InputType::KEY) {
             auto& k = ev.key;
-            if (k.cp == 'q' || k.cp == 'Q' || k.code == KEY_ESC)
+            if (k.cp == 'q' || k.cp == 'Q' || k.code == KeyCode::ESC)
                 quit = true;
             if (k.cp == 'a' || k.cp == 'A') ox = ox > 0 ? ox - 1 : 0;
             if (k.cp == 'd' || k.cp == 'D') ox = ox + FW < cols ? ox + 1 : ox;

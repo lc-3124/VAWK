@@ -21,6 +21,7 @@
 
 #include "entity.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>

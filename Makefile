@@ -36,9 +36,21 @@ check:
 	@echo "All headers OK."
 
 # Build the vatui library object.
-lib: build/bin.o/vatui.o
+lib: build/bin.o/vatui.o build/bin.o/entity.o build/bin.o/event_upstream.o build/bin.o/event_router.o
 
 build/bin.o/vatui.o: src/utils/vatui.cpp tui-utils/include/vatui.hpp
+	@mkdir -p build/bin.o
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
+
+build/bin.o/entity.o: src/vawk/entity.cpp include/vawk/entity.hpp include/vawk/event_upstream.hpp
+	@mkdir -p build/bin.o
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
+
+build/bin.o/event_upstream.o: src/vawk/event_upstream.cpp include/vawk/event_upstream.hpp
+	@mkdir -p build/bin.o
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
+
+build/bin.o/event_router.o: src/vawk/event_router.cpp include/vawk/event_router.hpp
 	@mkdir -p build/bin.o
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
 

@@ -162,33 +162,33 @@ struct FillArgs {
 
 // ---- Key-code constants ----------------------------------------------
 
-enum KeyCode : int {
-    KEY_NONE = 0,
-    KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
-    KEY_HOME, KEY_END, KEY_PGUP, KEY_PGDN, KEY_INS, KEY_DEL,
-    KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6,
-    KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11, KEY_F12,
-    KEY_ESC, KEY_TAB, KEY_ENTER, KEY_BACKSPACE,
+enum class KeyCode : int {
+    NONE = 0,
+    UP, DOWN, LEFT, RIGHT,
+    HOME, END, PGUP, PGDN, INS, DEL,
+    F1, F2, F3, F4, F5, F6,
+    F7, F8, F9, F10, F11, F12,
+    ESC, TAB, ENTER, BACKSPACE,
 };
 
 // ---- Key event -------------------------------------------------------
 
 struct Key {
     char32_t cp   = 0;       // Unicode codepoint for printable keys
-    KeyCode  code = KEY_NONE; // special-key code (KEY_NONE for printable)
+    KeyCode  code = KeyCode::NONE; // special-key code (KEY_NONE for printable)
     bool     alt  = false;   // whether the Alt / Meta modifier was detected
     bool     ctrl = false;   // whether the Ctrl modifier was detected
 };
 
 // ---- Unified input ---------------------------------------------------
 
-enum InputType : int {
-    INPUT_KEY   = 0,
-    INPUT_MOUSE = 1,
+enum class InputType : int {
+    KEY   = 0,
+    MOUSE = 1,
 };
 
 struct Input {
-    InputType          type = INPUT_KEY;
+    InputType          type = InputType::KEY;
     Key                key;
     vaterm::MouseState mouse;
 };

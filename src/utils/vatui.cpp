@@ -62,12 +62,12 @@ vatui::Key parse_csi(std::string_view params, char term) {
     using namespace vatui;
     if (params.empty()) {
         switch (term) {
-        case 'A': return {.code = KEY_UP};
-        case 'B': return {.code = KEY_DOWN};
-        case 'C': return {.code = KEY_RIGHT};
-        case 'D': return {.code = KEY_LEFT};
-        case 'H': return {.code = KEY_HOME};
-        case 'F': return {.code = KEY_END};
+        case 'A': return {.code = KeyCode::UP};
+        case 'B': return {.code = KeyCode::DOWN};
+        case 'C': return {.code = KeyCode::RIGHT};
+        case 'D': return {.code = KeyCode::LEFT};
+        case 'H': return {.code = KeyCode::HOME};
+        case 'F': return {.code = KeyCode::END};
         }
     }
     if (term == '~') {
@@ -77,24 +77,24 @@ vatui::Key parse_csi(std::string_view params, char term) {
             else break;
         }
         switch (n) {
-        case 1:  return {.code = KEY_HOME};
-        case 2:  return {.code = KEY_INS};
-        case 3:  return {.code = KEY_DEL};
-        case 4:  return {.code = KEY_END};
-        case 5:  return {.code = KEY_PGUP};
-        case 6:  return {.code = KEY_PGDN};
-        case 11: return {.code = KEY_F1};
-        case 12: return {.code = KEY_F2};
-        case 13: return {.code = KEY_F3};
-        case 14: return {.code = KEY_F4};
-        case 15: return {.code = KEY_F5};
-        case 17: return {.code = KEY_F6};
-        case 18: return {.code = KEY_F7};
-        case 19: return {.code = KEY_F8};
-        case 20: return {.code = KEY_F9};
-        case 21: return {.code = KEY_F10};
-        case 23: return {.code = KEY_F11};
-        case 24: return {.code = KEY_F12};
+        case 1:  return {.code = KeyCode::HOME};
+        case 2:  return {.code = KeyCode::INS};
+        case 3:  return {.code = KeyCode::DEL};
+        case 4:  return {.code = KeyCode::END};
+        case 5:  return {.code = KeyCode::PGUP};
+        case 6:  return {.code = KeyCode::PGDN};
+        case 11: return {.code = KeyCode::F1};
+        case 12: return {.code = KeyCode::F2};
+        case 13: return {.code = KeyCode::F3};
+        case 14: return {.code = KeyCode::F4};
+        case 15: return {.code = KeyCode::F5};
+        case 17: return {.code = KeyCode::F6};
+        case 18: return {.code = KeyCode::F7};
+        case 19: return {.code = KeyCode::F8};
+        case 20: return {.code = KeyCode::F9};
+        case 21: return {.code = KeyCode::F10};
+        case 23: return {.code = KeyCode::F11};
+        case 24: return {.code = KeyCode::F12};
         }
     }
     return {};
@@ -479,8 +479,8 @@ std::optional<Input> VaTui::getInput() {
     // Drain all available bytes into the input buffer.
     while (data_available()) {
         auto b = vaterm::terminal::read_byte();
-        if (b < 0) break;
-        input_buf_ += static_cast<char>(b);
+        if (!b) break;
+        input_buf_ += static_cast<char>(*b);
     }
     if (input_buf_.empty()) return std::nullopt;
 
@@ -496,7 +496,7 @@ std::optional<Input> VaTui::getInput() {
                     std::string_view(input_buf_).substr(0, i + 1));
                 if (ms) {
                     input_buf_.erase(0, i + 1);
-                    return Input{.type = INPUT_MOUSE, .key = {}, .mouse = *ms};
+                    return Input{.type = InputType::MOUSE, .key = {}, .mouse = *ms};
                 }
                 break;
             }
@@ -516,7 +516,7 @@ std::optional<Input> VaTui::getInput() {
                 sv.remove_suffix(1);
                 auto key = parse_csi(sv, term);
                 input_buf_.erase(0, i + 1);
-                return Input{.type = INPUT_KEY, .key = key, .mouse = {}};
+                return Input{.type = InputType::KEY, .key = key, .mouse = {}};
             }
         }
         return std::nullopt;
@@ -527,13 +527,13 @@ std::optional<Input> VaTui::getInput() {
         if (input_buf_.size() >= 3) {
             Key k;
             switch (input_buf_[2]) {
-            case 'P': k = {.code = KEY_F1}; break;
-            case 'Q': k = {.code = KEY_F2}; break;
-            case 'R': k = {.code = KEY_F3}; break;
-            case 'S': k = {.code = KEY_F4}; break;
+            case 'P': k = {.code = KeyCode::F1}; break;
+            case 'Q': k = {.code = KeyCode::F2}; break;
+            case 'R': k = {.code = KeyCode::F3}; break;
+            case 'S': k = {.code = KeyCode::F4}; break;
             }
             input_buf_.erase(0, 3);
-            return Input{.type = INPUT_KEY, .key = k, .mouse = {}};
+            return Input{.type = InputType::KEY, .key = k, .mouse = {}};
         }
         return std::nullopt;
     }
@@ -543,7 +543,7 @@ std::optional<Input> VaTui::getInput() {
         auto c = static_cast<unsigned char>(input_buf_[1]);
         if (c >= 0x20 && c <= 0x7E) {
             input_buf_.erase(0, 2);
-            return Input{.type = INPUT_KEY,
+            return Input{.type = InputType::KEY,
                          .key = {.cp = static_cast<char32_t>(c), .alt = true},
                          .mouse = {}};
         }
@@ -554,18 +554,18 @@ std::optional<Input> VaTui::getInput() {
     // ── Bare Escape key ─────────────────────────────────────────────
     if (b0 == 0x1B) {
         input_buf_.erase(0, 1);
-        return Input{.type = INPUT_KEY, .key = {.code = KEY_ESC}, .mouse = {}};
+        return Input{.type = InputType::KEY, .key = {.code = KeyCode::ESC}, .mouse = {}};
     }
 
     // ── Single-byte control characters ──────────────────────────────
-    if (b0 == 0x09) { input_buf_.erase(0, 1); return Input{.type = INPUT_KEY, .key = {.code = KEY_TAB}, .mouse = {}}; }
-    if (b0 == 0x0D) { input_buf_.erase(0, 1); return Input{.type = INPUT_KEY, .key = {.code = KEY_ENTER}, .mouse = {}}; }
-    if (b0 == 0x7F) { input_buf_.erase(0, 1); return Input{.type = INPUT_KEY, .key = {.code = KEY_BACKSPACE}, .mouse = {}}; }
+    if (b0 == 0x09) { input_buf_.erase(0, 1); return Input{.type = InputType::KEY, .key = {.code = KeyCode::TAB}, .mouse = {}}; }
+    if (b0 == 0x0D) { input_buf_.erase(0, 1); return Input{.type = InputType::KEY, .key = {.code = KeyCode::ENTER}, .mouse = {}}; }
+    if (b0 == 0x7F) { input_buf_.erase(0, 1); return Input{.type = InputType::KEY, .key = {.code = KeyCode::BACKSPACE}, .mouse = {}}; }
 
     // ── Printable ASCII ─────────────────────────────────────────────
     if (b0 >= 0x20 && b0 <= 0x7E) {
         input_buf_.erase(0, 1);
-        return Input{.type = INPUT_KEY,
+        return Input{.type = InputType::KEY,
                      .key = {.cp = static_cast<char32_t>(b0)},
                      .mouse = {}};
     }
@@ -576,7 +576,7 @@ std::optional<Input> VaTui::getInput() {
         auto k = decode_utf8_key(input_buf_, seq_len);
         if (seq_len > 0) {
             input_buf_.erase(0, seq_len);
-            return Input{.type = INPUT_KEY, .key = k, .mouse = {}};
+            return Input{.type = InputType::KEY, .key = k, .mouse = {}};
         }
         return std::nullopt;
     }
@@ -584,7 +584,7 @@ std::optional<Input> VaTui::getInput() {
     // ── Ctrl+@ / Ctrl+Space (NUL, 0x00) ────────────────────────────
     if (b0 == 0x00) {
         input_buf_.erase(0, 1);
-        return Input{.type = INPUT_KEY,
+        return Input{.type = InputType::KEY,
                      .key = {.cp = U' ', .ctrl = true},
                      .mouse = {}};
     }
@@ -592,7 +592,7 @@ std::optional<Input> VaTui::getInput() {
     // ── Ctrl+a … Ctrl+z (0x01–0x1A) ────────────────────────────────
     if (b0 >= 0x01 && b0 <= 0x1A) {
         input_buf_.erase(0, 1);
-        return Input{.type = INPUT_KEY,
+        return Input{.type = InputType::KEY,
                      .key = {.cp = static_cast<char32_t>('a' + b0 - 1),
                              .ctrl = true},
                      .mouse = {}};
@@ -604,7 +604,7 @@ std::optional<Input> VaTui::getInput() {
         auto cp = b0 == 0x1C ? U'\\'
                 : b0 == 0x1D ? U']'
                 : b0 == 0x1E ? U'^' : U'_';
-        return Input{.type = INPUT_KEY,
+        return Input{.type = InputType::KEY,
                      .key = {.cp = cp, .ctrl = true},
                      .mouse = {}};
     }
