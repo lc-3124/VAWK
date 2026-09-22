@@ -455,9 +455,10 @@ inline void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>
 //  input — 输入模块
 // ===========================================================================
 //
-//  接管终端输入：start() 进入 raw 模式、开启鼠标追踪并启动后台解析线程；
-//  线程把 stdin 的字节喂给 input_fsm，产出的 InputData 放入内部缓冲队列；
-//  消费者通过 read() 从队列取事件。stop() 停线程、关鼠标追踪、恢复终端。
+//  接管终端输入：start() 开启鼠标追踪并启动后台解析线程；线程把 stdin 的
+//  字节喂给 input_fsm，产出的 InputData 放入内部缓冲队列；消费者通过 read()
+//  从队列取事件。stop() 停线程、关鼠标追踪。
+//  （raw 模式的进入/退出不属于本模块，由调用方负责。）
 //
 //  线程安全：read() / empty() / getState() 可与后台线程并发调用。
 // ===========================================================================
@@ -488,9 +489,9 @@ class input {
 
     /// 用户接触的接口
 
-    /// 接管输入：进入 raw 模式、开启鼠标追踪、启动后台解析线程。成功返回 true。
+    /// 接管输入：开启鼠标追踪、启动后台解析线程。成功返回 true。
     bool start();
-    /// 交还输入：停线程、关闭鼠标追踪、恢复终端。成功返回 true。
+    /// 交还输入：停线程、关闭鼠标追踪。成功返回 true。
     bool stop();
 
     /// 开启 / 关闭鼠标追踪（需已 start）。成功返回 true。
@@ -515,7 +516,6 @@ class input {
     void enqueue(std::deque<InputData>& produced);
     void update_state();
 
-    terminal               term_;
     input_fsm              fsm_;
     std::deque<InputData>  queue_;
     mutable std::mutex     m_;
@@ -535,7 +535,6 @@ inline input::~input() { stop(); }
 
 inline bool input::start() {
     if (running_) return true;
-    if (!term_.enter_raw()) { state_ = InputMode::INPUT_DISABLE; return false; }
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
     mouse_enabled_ = true;
@@ -556,7 +555,6 @@ inline bool input::stop() {
     }
     terminal::write("\033[?1006l\033[?1002l\033[?1000l");
     terminal::flush();
-    term_.exit_raw();
     state_ = InputMode::OFF;
     return true;
 }
