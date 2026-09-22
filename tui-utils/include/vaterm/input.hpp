@@ -534,14 +534,13 @@ class input {
 
     // 以下需在持有 m_ 时调用。
     static bool match(InputData::InputType type, const InputData& d);
-    bool        has_new_match(InputData::InputType type, std::uint64_t after) const;
-    InputData   latest(InputData::InputType type) const;
-    InputData   latest_new(InputData::InputType type, std::uint64_t after) const;
+    InputData   latest(InputData::InputType type) const;   ///< 历史里最新的匹配项
 
     input_fsm               fsm_;
     std::deque<Entry>       buffer_;   ///< 定长环形缓冲，超出容量丢弃最旧的
     std::uint64_t           seq_ = 0;  ///< 最近一次写入的序号
     mutable std::mutex      m_;
+    std::mutex              lifecycle_;   ///< 串行化 start/stop
     std::condition_variable cv_;
     std::atomic<bool>       running_{false};
     std::atomic<bool>       mouse_enabled_{false};
@@ -557,6 +556,7 @@ inline input::input() = default;
 inline input::~input() { stop(); }
 
 inline bool input::start() {
+    std::lock_guard<std::mutex> lk(lifecycle_);
     if (running_) return true;
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
@@ -565,6 +565,7 @@ inline bool input::start() {
         buffer_.clear();
         seq_ = 0;
     }
+    if (reader_.joinable()) reader_.join();   // 回收可能已结束的旧线程
     mouse_enabled_ = true;
     keybd_enabled_ = true;
     running_       = true;
@@ -574,7 +575,8 @@ inline bool input::start() {
 }
 
 inline bool input::stop() {
-    if (!running_.exchange(false)) { state_ = InputMode::OFF; return true; }
+    std::lock_guard<std::mutex> lk(lifecycle_);
+    running_ = false;
     cv_.notify_all();
     if (reader_.joinable()) reader_.join();
     {
@@ -635,18 +637,47 @@ inline void input::update_state() {
 
 inline void input::reader_loop() {
     std::deque<InputData> produced;
+    int idle_ready = 0;   // 连续“poll 说可读却读不到”的次数，用于识别 EOF
     while (running_) {
         struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
         int r = ::poll(&pfd, 1, 50);
         if (r < 0) continue;
+
         if (r == 0) {                 // 超时：收敛孤立的 Esc
+            idle_ready = 0;
             fsm_.flush_pending(produced);
             enqueue(produced);
             continue;
         }
-        while (auto b = terminal::read_byte())
+
+        // 只排空“此刻确实可读”的字节：用 poll(0) 预检，
+        // 避免 read_byte() 在非 raw / 管道下阻塞住。
+        bool got_any = false;
+        for (;;) {
+            struct pollfd q = {STDIN_FILENO, POLLIN, 0};
+            if (::poll(&q, 1, 0) <= 0) break;
+            auto b = terminal::read_byte();
+            if (!b) break;
             fsm_.feed(*b, produced);
+            got_any = true;
+        }
         enqueue(produced);
+
+        // 输入源结束：HUP/ERR/NVAL，或反复“可读却无数据”（如普通文件 EOF）。
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            running_ = false;
+            state_   = InputMode::INPUT_DISABLE;
+            cv_.notify_all();
+            break;
+        }
+        if (got_any) {
+            idle_ready = 0;
+        } else if (++idle_ready > 3) {
+            running_ = false;
+            state_   = InputMode::INPUT_DISABLE;
+            cv_.notify_all();
+            break;
+        }
     }
 }
 
@@ -672,21 +703,9 @@ inline bool input::match(InputData::InputType type, const InputData& d) {
     return type == InputData::InputType::NON || d.inputType == type;
 }
 
-inline bool input::has_new_match(InputData::InputType type, std::uint64_t after) const {
-    for (const auto& e : buffer_)
-        if (e.seq > after && match(type, e.data)) return true;
-    return false;
-}
-
 inline InputData input::latest(InputData::InputType type) const {
     for (auto it = buffer_.rbegin(); it != buffer_.rend(); ++it)
         if (match(type, it->data)) return it->data;
-    return InputData{};
-}
-
-inline InputData input::latest_new(InputData::InputType type, std::uint64_t after) const {
-    for (auto it = buffer_.rbegin(); it != buffer_.rend(); ++it)
-        if (it->seq > after && match(type, it->data)) return it->data;
     return InputData{};
 }
 
@@ -703,13 +722,20 @@ inline InputData input::getInput() {
 inline InputData input::waitInput(InputData::InputType type, int timeout_ms) {
     std::unique_lock<std::mutex> lock(m_);
     const std::uint64_t start = seq_;
-    auto ready = [&] { return !running_ || has_new_match(type, start); };
+    // “最近更新的那一条”既要是新的（序号 > start），类型也要匹配。
+    auto newest_matches = [&] {
+        return !buffer_.empty() && buffer_.back().seq > start
+               && match(type, buffer_.back().data);
+    };
+    auto ready = [&] { return !running_ || newest_matches(); };
+
     if (timeout_ms < 0) {
         cv_.wait(lock, ready);
     } else if (!cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
         return InputData{};                 // 超时 → NON
     }
-    return latest_new(type, start);         // 新的匹配事件；没有则 NON
+    if (!running_ || !newest_matches()) return InputData{};   // 被 stop / 最新不是要的
+    return buffer_.back().data;             // 返回最近更新的那一条
 }
 
 inline InputData input::waitInput(int timeout_ms) {
