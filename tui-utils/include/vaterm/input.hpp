@@ -27,6 +27,10 @@
 
 namespace vaterm {
 
+// ===========================================================================
+//  InputData — 输入数据包
+// ===========================================================================
+
 /// 输入数据包：状态机解析出的一个键盘或鼠标事件
 struct InputData {
     // ── 子结构定义 ─────────────────────────────────────────────────────────
@@ -101,31 +105,41 @@ struct InputData {
         MouseData mouse;  ///< 鼠标
         KeybdData keybd;  ///< 键盘
 
-        Value() {}  ///< 不主动初始化任何成员，由构造器/赋值决定
-        ~Value() {}
+        Value();
+        ~Value();
     } value;
 
     // ── 构造数据包 ─────────────────────────────────────────────────────────
 
-    /// 构造一个空包
-    InputData() {}
+    InputData();
 
     /// 构造鼠标包
-    static InputData makeMouse(const MouseData& m) {
-        InputData d;
-        d.inputType   = InputType::MOUSE;
-        d.value.mouse = m;
-        return d;
-    }
-
+    static InputData makeMouse(const MouseData& m);
     /// 构造键盘包
-    static InputData makeKeybd(const KeybdData& k) {
-        InputData d;
-        d.inputType   = InputType::KEYBD;
-        d.value.keybd = k;
-        return d;
-    }
+    static InputData makeKeybd(const KeybdData& k);
 };
+
+// ── InputData 实现 ──────────────────────────────────────────────────────────
+
+inline InputData::InputData() {}
+
+inline InputData::Value::Value() {}
+
+inline InputData::Value::~Value() {}
+
+inline InputData InputData::makeMouse(const MouseData& m) {
+    InputData d;
+    d.inputType   = InputType::MOUSE;
+    d.value.mouse = m;
+    return d;
+}
+
+inline InputData InputData::makeKeybd(const KeybdData& k) {
+    InputData d;
+    d.inputType   = InputType::KEYBD;
+    d.value.keybd = k;
+    return d;
+}
 
 // ===========================================================================
 //  input_fsm — 输入状态机（内部实现）
@@ -148,41 +162,16 @@ struct InputData {
 class input_fsm {
   public:
     /// 喂入一个字节，解析出的事件追加到 out。
-    void feed(unsigned char b, std::deque<InputData>& out) {
-        bool reprocess = true;
-        while (reprocess) {
-            switch (state_) {
-            case State::GROUND: reprocess = step_ground(b, out); break;
-            case State::ESC:    reprocess = step_esc(b, out);    break;
-            case State::CSI:    reprocess = step_csi(b, out);    break;
-            case State::SS3:    reprocess = step_ss3(b, out);    break;
-            case State::MOUSE:  reprocess = step_mouse(b, out);  break;
-            case State::UTF8:   reprocess = step_utf8(b, out);   break;
-            }
-        }
-    }
-
+    void feed(unsigned char b, std::deque<InputData>& out);
     /// 喂入一段字节。
-    void feed(std::string_view bytes, std::deque<InputData>& out) {
-        for (unsigned char b : bytes) feed(b, out);
-    }
+    void feed(std::string_view bytes, std::deque<InputData>& out);
 
     /// 是否有尚未完成的序列（半截 CSI / 鼠标 / UTF-8，或孤立的 ESC）。
-    bool pending() const { return state_ != State::GROUND; }
-
+    bool pending() const;
     /// 超时调用：把孤立的 ESC 收敛成 Esc 键事件；其它半截序列保留等待后续字节。
-    void flush_pending(std::deque<InputData>& out) {
-        if (state_ == State::ESC) {
-            push_key(out, 0, InputData::KeyCode::ESC);
-            reset();
-        }
-    }
-
+    void flush_pending(std::deque<InputData>& out);
     /// 复位（丢弃半截序列）。
-    void reset() {
-        state_ = State::GROUND;
-        acc_.clear();
-    }
+    void reset();
 
   private:
     enum class State { GROUND, ESC, CSI, SS3, MOUSE, UTF8 };
@@ -193,9 +182,7 @@ class input_fsm {
     /// 构造一个键盘事件追加到 out。
     static void push_key(std::deque<InputData>& out, char32_t cp,
                          InputData::KeyCode code,
-                         bool shift = false, bool alt = false, bool ctrl = false) {
-        out.push_back(InputData::makeKeybd({cp, code, shift, alt, ctrl}));
-    }
+                         bool shift = false, bool alt = false, bool ctrl = false);
 
     // 各状态处理；返回 true 表示同一字节需在新状态下重新处理。
     bool step_ground(unsigned char b, std::deque<InputData>& out);
@@ -212,6 +199,46 @@ class input_fsm {
 };
 
 // ── input_fsm 实现 ──────────────────────────────────────────────────────────
+
+inline void input_fsm::feed(unsigned char b, std::deque<InputData>& out) {
+    bool reprocess = true;
+    while (reprocess) {
+        switch (state_) {
+        case State::GROUND: reprocess = step_ground(b, out); break;
+        case State::ESC:    reprocess = step_esc(b, out);    break;
+        case State::CSI:    reprocess = step_csi(b, out);    break;
+        case State::SS3:    reprocess = step_ss3(b, out);    break;
+        case State::MOUSE:  reprocess = step_mouse(b, out);  break;
+        case State::UTF8:   reprocess = step_utf8(b, out);   break;
+        }
+    }
+}
+
+inline void input_fsm::feed(std::string_view bytes, std::deque<InputData>& out) {
+    for (unsigned char b : bytes) feed(b, out);
+}
+
+inline bool input_fsm::pending() const {
+    return state_ != State::GROUND;
+}
+
+inline void input_fsm::flush_pending(std::deque<InputData>& out) {
+    if (state_ == State::ESC) {
+        push_key(out, 0, InputData::KeyCode::ESC);
+        reset();
+    }
+}
+
+inline void input_fsm::reset() {
+    state_ = State::GROUND;
+    acc_.clear();
+}
+
+inline void input_fsm::push_key(std::deque<InputData>& out, char32_t cp,
+                                InputData::KeyCode code,
+                                bool shift, bool alt, bool ctrl) {
+    out.push_back(InputData::makeKeybd({cp, code, shift, alt, ctrl}));
+}
 
 inline bool input_fsm::step_ground(unsigned char b, std::deque<InputData>& out) {
     using KC = InputData::KeyCode;
@@ -327,7 +354,7 @@ inline void input_fsm::parse_csi(std::string_view params, char final,
         return v;
     };
     // 参数形如 "n" 或 "n;m"（m 为修饰键编码）。
-    auto semi  = params.find(';');
+    auto semi   = params.find(';');
     int  main_n = semi == std::string_view::npos ? to_int(params)
                                                  : to_int(params.substr(0, semi));
     int  mod    = semi == std::string_view::npos ? 0 : to_int(params.substr(semi + 1));
@@ -432,7 +459,7 @@ inline void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>
 //  线程把 stdin 的字节喂给 input_fsm，产出的 InputData 放入内部缓冲队列；
 //  消费者通过 read() 从队列取事件。stop() 停线程、关鼠标追踪、恢复终端。
 //
-//  线程安全：read() / empty() 可与后台线程并发调用。
+//  线程安全：read() / empty() / getState() 可与后台线程并发调用。
 // ===========================================================================
 
 class input {
@@ -454,8 +481,8 @@ class input {
         OFF           = 4
     };
 
-    input() = default;
-    ~input() { stop(); }
+    input();
+    ~input();
     input(const input&) = delete;
     input& operator=(const input&) = delete;
 
@@ -474,7 +501,7 @@ class input {
     bool disableKeyBd();
 
     /// 查询当前工作状态（ON / OFF / MOUSE_DISABLE / KEYBD_DISABLE / INPUT_DISABLE）。
-    InputMode getState() const { return state_.load(); }
+    InputMode getState() const;
 
     /// 从缓冲队列取一个事件。
     /// timeout_ms < 0 阻塞直到有事件或被 stop 唤醒；= 0 非阻塞；> 0 最多等待。
@@ -501,6 +528,10 @@ class input {
 };
 
 // ── input 实现 ──────────────────────────────────────────────────────────────
+
+inline input::input() = default;
+
+inline input::~input() { stop(); }
 
 inline bool input::start() {
     if (running_) return true;
@@ -560,6 +591,10 @@ inline bool input::disableKeyBd() {
     keybd_enabled_ = false;
     update_state();
     return true;
+}
+
+inline input::InputMode input::getState() const {
+    return state_.load();
 }
 
 inline void input::update_state() {
