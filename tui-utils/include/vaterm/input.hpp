@@ -461,17 +461,20 @@ class input {
 
     /// 用户接触的接口
 
-    /// 接管输入：进入 raw 模式、开启鼠标追踪、启动后台解析线程（幂等）。
-    InputMode start();
-    /// 交还输入：停线程、关闭鼠标追踪、恢复终端（幂等）。
-    InputMode stop();
+    /// 接管输入：进入 raw 模式、开启鼠标追踪、启动后台解析线程。成功返回 true。
+    bool start();
+    /// 交还输入：停线程、关闭鼠标追踪、恢复终端。成功返回 true。
+    bool stop();
 
-    /// 开启 / 关闭鼠标追踪（需已 start）。
-    InputMode enableMouse();
-    InputMode disableMouse();
-    /// 开启 / 关闭键盘事件（关闭后键盘事件被丢弃，仍会被解析）。
-    InputMode enableKeyBd();
-    InputMode disableKeyBd();
+    /// 开启 / 关闭鼠标追踪（需已 start）。成功返回 true。
+    bool enableMouse();
+    bool disableMouse();
+    /// 开启 / 关闭键盘事件（关闭后键盘事件被丢弃，仍会被解析）。成功返回 true。
+    bool enableKeyBd();
+    bool disableKeyBd();
+
+    /// 查询当前工作状态（ON / OFF / MOUSE_DISABLE / KEYBD_DISABLE / INPUT_DISABLE）。
+    InputMode getState() const { return state_.load(); }
 
     /// 从缓冲队列取一个事件。
     /// timeout_ms < 0 阻塞直到有事件或被 stop 唤醒；= 0 非阻塞；> 0 最多等待。
@@ -483,6 +486,7 @@ class input {
   private:
     void reader_loop();
     void enqueue(std::deque<InputData>& produced);
+    void update_state();
 
     terminal               term_;
     input_fsm              fsm_;
@@ -490,25 +494,29 @@ class input {
     mutable std::mutex     m_;
     std::condition_variable cv_;
     std::atomic<bool>      running_{false};
+    std::atomic<bool>      mouse_enabled_{false};
     std::atomic<bool>      keybd_enabled_{true};
+    std::atomic<InputMode> state_{InputMode::OFF};
     std::thread            reader_;
 };
 
 // ── input 实现 ──────────────────────────────────────────────────────────────
 
-inline input::InputMode input::start() {
-    if (running_) return InputMode::ON;
-    if (!term_.enter_raw()) return InputMode::INPUT_DISABLE;
+inline bool input::start() {
+    if (running_) return true;
+    if (!term_.enter_raw()) { state_ = InputMode::INPUT_DISABLE; return false; }
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
+    mouse_enabled_ = true;
     keybd_enabled_ = true;
     running_       = true;
     reader_        = std::thread([this] { reader_loop(); });
-    return InputMode::ON;
+    state_         = InputMode::ON;
+    return true;
 }
 
-inline input::InputMode input::stop() {
-    if (!running_.exchange(false)) return InputMode::OFF;
+inline bool input::stop() {
+    if (!running_.exchange(false)) { state_ = InputMode::OFF; return true; }
     cv_.notify_all();
     if (reader_.joinable()) reader_.join();
     {
@@ -518,31 +526,49 @@ inline input::InputMode input::stop() {
     terminal::write("\033[?1006l\033[?1002l\033[?1000l");
     terminal::flush();
     term_.exit_raw();
-    return InputMode::OFF;
+    state_ = InputMode::OFF;
+    return true;
 }
 
-inline input::InputMode input::enableMouse() {
-    if (!running_) return InputMode::OFF;
+inline bool input::enableMouse() {
+    if (!running_) return false;
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
-    return InputMode::ON;
+    mouse_enabled_ = true;
+    update_state();
+    return true;
 }
 
-inline input::InputMode input::disableMouse() {
-    if (!running_) return InputMode::OFF;
+inline bool input::disableMouse() {
+    if (!running_) return false;
     terminal::write("\033[?1006l\033[?1002l\033[?1000l");
     terminal::flush();
-    return InputMode::ON;
+    mouse_enabled_ = false;
+    update_state();
+    return true;
 }
 
-inline input::InputMode input::enableKeyBd() {
+inline bool input::enableKeyBd() {
+    if (!running_) return false;
     keybd_enabled_ = true;
-    return running_ ? InputMode::ON : InputMode::OFF;
+    update_state();
+    return true;
 }
 
-inline input::InputMode input::disableKeyBd() {
+inline bool input::disableKeyBd() {
+    if (!running_) return false;
     keybd_enabled_ = false;
-    return running_ ? InputMode::ON : InputMode::OFF;
+    update_state();
+    return true;
+}
+
+inline void input::update_state() {
+    bool k  = keybd_enabled_;
+    bool mo = mouse_enabled_;
+    state_  = (k && mo)  ? InputMode::ON
+            : (k && !mo) ? InputMode::MOUSE_DISABLE
+            : (!k && mo) ? InputMode::KEYBD_DISABLE
+                         : InputMode::INPUT_DISABLE;
 }
 
 inline void input::reader_loop() {
