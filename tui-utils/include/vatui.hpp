@@ -2,35 +2,31 @@
 #define VATUI_HPP
 
 // -----------------------------------------------------------------------
-//  vatui — terminal framebuffer and input toolkit
+//  vatui — terminal framebuffer toolkit
 //
 //  Builds on vaterm with:
 //    - Framebuffer  — double-buffered cell matrix, diff-based swap,
 //                     UTF-8 / wide-character support, styled fill & text.
 //    - VaTui        — singleton that owns a Framebuffer + a terminal
-//                     instance and provides unified input (key / mouse).
+//                     instance.
 //
 //  Usage:
 //    auto& tui = VaTui::instance();
 //    tui.init();
-//    tui.enableMouse();
 //    auto& fb = tui.buffer();
 //    fb.printText({.col = 0, .row = 0, .text = "Hi", .style = {...}});
 //    fb.swap();
-//    auto ev = tui.waitInput();
 //
 //  The library is split into hpp (declaration) and cpp (implementation).
 // -----------------------------------------------------------------------
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "vaterm/color.hpp"
 #include "vaterm/enums.hpp"
-#include "vaterm/mouse.hpp"
 #include "vaterm/term.hpp"
 
 namespace vatui {
@@ -121,8 +117,8 @@ inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
 
 struct Style {
     std::string fg_sgr      = vaterm::color::fg(vaterm::Color4::WHITE);
-    std::string bg_sgr;                        // default: no bg (terminal native)
-    std::string effects_sgr;
+    std::string bg_sgr      = vatui::bg(vaterm::TRANS);                        // default: no bg (terminal native)
+    std::string effects_sgr = "";
 };
 
 // ---- parameter structs (enables designated-initialiser syntax) -------
@@ -158,39 +154,6 @@ struct FillArgs {
     int  h;
     char ch;
     Style style = {};
-};
-
-// ---- Key-code constants ----------------------------------------------
-
-enum class KeyCode : int {
-    NONE = 0,
-    UP, DOWN, LEFT, RIGHT,
-    HOME, END, PGUP, PGDN, INS, DEL,
-    F1, F2, F3, F4, F5, F6,
-    F7, F8, F9, F10, F11, F12,
-    ESC, TAB, ENTER, BACKSPACE,
-};
-
-// ---- Key event -------------------------------------------------------
-
-struct Key {
-    char32_t cp   = 0;       // Unicode codepoint for printable keys
-    KeyCode  code = KeyCode::NONE; // special-key code (KEY_NONE for printable)
-    bool     alt  = false;   // whether the Alt / Meta modifier was detected
-    bool     ctrl = false;   // whether the Ctrl modifier was detected
-};
-
-// ---- Unified input ---------------------------------------------------
-
-enum class InputType : int {
-    KEY   = 0,
-    MOUSE = 1,
-};
-
-struct Input {
-    InputType          type = InputType::KEY;
-    Key                key;
-    vaterm::MouseState mouse;
 };
 
 // ---- Framebuffer (double-buffered cell matrix) -----------------------
@@ -353,14 +316,6 @@ class VaTui {
     // ── Framebuffer access ──────────────────────────────────────────
     Framebuffer& buffer() { return fb_; }
 
-    // ── Unified input ───────────────────────────────────────────────
-    std::optional<Input> getInput();
-    Input                waitInput();
-
-    // ── Mouse enable / disable ──────────────────────────────────────
-    void enableMouse();
-    void disableMouse();
-
   private:
     VaTui();
     ~VaTui();
@@ -368,7 +323,6 @@ class VaTui {
     Framebuffer          fb_;
     vaterm::terminal     term_;
     bool                 initialized_ = false;
-    std::string          input_buf_;
 };
 
 } // namespace vatui

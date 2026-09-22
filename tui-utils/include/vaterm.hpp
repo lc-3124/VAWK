@@ -40,7 +40,7 @@
 #include "vaterm/enums.hpp"
 #include "vaterm/color.hpp"
 #include "vaterm/cursor.hpp"
-#include "vaterm/mouse.hpp"
+#include "vaterm/input.hpp"
 #include "vaterm/term.hpp"
 #include "vaterm/system.hpp"
 #include "vaterm/utf.hpp"
