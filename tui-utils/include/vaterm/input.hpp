@@ -14,7 +14,6 @@
 #include <cstdint>
 #include <deque>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -24,6 +23,12 @@
 #include <unistd.h>
 
 #include "term.hpp"
+
+/// 环形缓冲容量：只保留最近 VATERM_INPUT_BUFFER_SIZE 条事件，超出丢弃最旧的。
+/// 可在编译期用 -DVATERM_INPUT_BUFFER_SIZE=N 覆盖。
+#ifndef VATERM_INPUT_BUFFER_SIZE
+#define VATERM_INPUT_BUFFER_SIZE 16
+#endif
 
 namespace vaterm {
 
@@ -456,11 +461,12 @@ inline void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>
 // ===========================================================================
 //
 //  接管终端输入：start() 开启鼠标追踪并启动后台解析线程；线程把 stdin 的
-//  字节喂给 input_fsm，产出的 InputData 放入内部缓冲队列；消费者通过 read()
-//  从队列取事件。stop() 停线程、关鼠标追踪。
+//  字节喂给 input_fsm，产出的 InputData 放进定长环形缓冲（只保留最近若干条，
+//  为了省内存，已入队事件不会被取走）；消费者用 getInput() 查询最新事件，
+//  或用 waitInput() 等待新的匹配事件。stop() 停线程、关鼠标追踪。
 //  （raw 模式的进入/退出不属于本模块，由调用方负责。）
 //
-//  线程安全：read() / empty() / getState() 可与后台线程并发调用。
+//  线程安全：getInput() / waitInput() / getState() 可与后台线程并发调用。
 // ===========================================================================
 
 class input {
@@ -504,27 +510,44 @@ class input {
     /// 查询当前工作状态（ON / OFF / MOUSE_DISABLE / KEYBD_DISABLE / INPUT_DISABLE）。
     InputMode getState() const;
 
-    /// 从缓冲队列取一个事件。
-    /// timeout_ms < 0 阻塞直到有事件或被 stop 唤醒；= 0 非阻塞；> 0 最多等待。
-    std::optional<InputData> read(int timeout_ms = 0);
+    /// 非阻塞：返回缓冲区里符合 type 的**最新**事件；没有则返回 NON 空包。
+    /// type 传 NON 表示不限类型（取最新的一条任意事件）。
+    InputData getInput(InputData::InputType type);
+    InputData getInput();
 
-    /// 缓冲队列当前是否为空。
-    bool empty() const;
+    /// 阻塞：等待**新的**符合 type 的事件（不取走、不消费）。
+    /// timeout_ms < 0 无限等待；>= 0 有限等待，超时返回 NON 空包。
+    /// type 传 NON 表示不限类型。
+    InputData waitInput(InputData::InputType type, int timeout_ms = -1);
+    InputData waitInput(int timeout_ms = -1);
 
   private:
+    /// 缓冲条目：事件 + 单调递增写入序号（用于判断"是不是新的"）。
+    struct Entry {
+        std::uint64_t seq;
+        InputData     data;
+    };
+
     void reader_loop();
     void enqueue(std::deque<InputData>& produced);
     void update_state();
 
-    input_fsm              fsm_;
-    std::deque<InputData>  queue_;
-    mutable std::mutex     m_;
+    // 以下需在持有 m_ 时调用。
+    static bool match(InputData::InputType type, const InputData& d);
+    bool        has_new_match(InputData::InputType type, std::uint64_t after) const;
+    InputData   latest(InputData::InputType type) const;
+    InputData   latest_new(InputData::InputType type, std::uint64_t after) const;
+
+    input_fsm               fsm_;
+    std::deque<Entry>       buffer_;   ///< 定长环形缓冲，超出容量丢弃最旧的
+    std::uint64_t           seq_ = 0;  ///< 最近一次写入的序号
+    mutable std::mutex      m_;
     std::condition_variable cv_;
-    std::atomic<bool>      running_{false};
-    std::atomic<bool>      mouse_enabled_{false};
-    std::atomic<bool>      keybd_enabled_{true};
-    std::atomic<InputMode> state_{InputMode::OFF};
-    std::thread            reader_;
+    std::atomic<bool>       running_{false};
+    std::atomic<bool>       mouse_enabled_{false};
+    std::atomic<bool>       keybd_enabled_{true};
+    std::atomic<InputMode>  state_{InputMode::OFF};
+    std::thread             reader_;
 };
 
 // ── input 实现 ──────────────────────────────────────────────────────────────
@@ -537,6 +560,11 @@ inline bool input::start() {
     if (running_) return true;
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        buffer_.clear();
+        seq_ = 0;
+    }
     mouse_enabled_ = true;
     keybd_enabled_ = true;
     running_       = true;
@@ -551,7 +579,8 @@ inline bool input::stop() {
     if (reader_.joinable()) reader_.join();
     {
         std::lock_guard<std::mutex> lock(m_);
-        queue_.clear();
+        buffer_.clear();
+        seq_ = 0;
     }
     terminal::write("\033[?1006l\033[?1002l\033[?1000l");
     terminal::flush();
@@ -623,33 +652,68 @@ inline void input::reader_loop() {
 
 inline void input::enqueue(std::deque<InputData>& produced) {
     if (produced.empty()) return;
+    bool pushed = false;
     {
         std::lock_guard<std::mutex> lock(m_);
         bool keep_key = keybd_enabled_;
-        for (auto& e : produced)
-            if (keep_key || e.inputType != InputData::InputType::KEYBD)
-                queue_.push_back(std::move(e));
+        for (auto& e : produced) {
+            if (!keep_key && e.inputType == InputData::InputType::KEYBD) continue;
+            buffer_.push_back(Entry{++seq_, std::move(e)});
+            pushed = true;
+        }
+        while (buffer_.size() > VATERM_INPUT_BUFFER_SIZE)
+            buffer_.pop_front();
         produced.clear();
     }
-    cv_.notify_all();
+    if (pushed) cv_.notify_all();
 }
 
-inline std::optional<InputData> input::read(int timeout_ms) {
-    std::unique_lock<std::mutex> lock(m_);
-    auto ready = [this] { return !queue_.empty() || !running_; };
-    if (!ready()) {
-        if (timeout_ms < 0) cv_.wait(lock, ready);
-        else cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready);
-    }
-    if (queue_.empty()) return std::nullopt;
-    InputData e = std::move(queue_.front());
-    queue_.pop_front();
-    return e;
+inline bool input::match(InputData::InputType type, const InputData& d) {
+    return type == InputData::InputType::NON || d.inputType == type;
 }
 
-inline bool input::empty() const {
+inline bool input::has_new_match(InputData::InputType type, std::uint64_t after) const {
+    for (const auto& e : buffer_)
+        if (e.seq > after && match(type, e.data)) return true;
+    return false;
+}
+
+inline InputData input::latest(InputData::InputType type) const {
+    for (auto it = buffer_.rbegin(); it != buffer_.rend(); ++it)
+        if (match(type, it->data)) return it->data;
+    return InputData{};
+}
+
+inline InputData input::latest_new(InputData::InputType type, std::uint64_t after) const {
+    for (auto it = buffer_.rbegin(); it != buffer_.rend(); ++it)
+        if (it->seq > after && match(type, it->data)) return it->data;
+    return InputData{};
+}
+
+inline InputData input::getInput(InputData::InputType type) {
     std::lock_guard<std::mutex> lock(m_);
-    return queue_.empty();
+    return latest(type);
+}
+
+inline InputData input::getInput() {
+    std::lock_guard<std::mutex> lock(m_);
+    return latest(InputData::InputType::NON);
+}
+
+inline InputData input::waitInput(InputData::InputType type, int timeout_ms) {
+    std::unique_lock<std::mutex> lock(m_);
+    const std::uint64_t start = seq_;
+    auto ready = [&] { return !running_ || has_new_match(type, start); };
+    if (timeout_ms < 0) {
+        cv_.wait(lock, ready);
+    } else if (!cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
+        return InputData{};                 // 超时 → NON
+    }
+    return latest_new(type, start);         // 新的匹配事件；没有则 NON
+}
+
+inline InputData input::waitInput(int timeout_ms) {
+    return waitInput(InputData::InputType::NON, timeout_ms);
 }
 
 } // namespace vaterm
