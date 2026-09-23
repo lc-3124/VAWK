@@ -234,6 +234,65 @@ inline std::string KeyPrintf(const InputData::KeybdData& key) {
 }
 
 // ===========================================================================
+//  MousePrintf / InputPrintf — 鼠标与通用事件的显示字符串
+// ===========================================================================
+
+/// 鼠标按键 → 显示串。
+inline constexpr std::string_view MousePrintf(InputData::MouseButton b) {
+    switch (b) {
+    case InputData::MouseButton::NONE:   return "NONE";
+    case InputData::MouseButton::LEFT:   return "LEFT";
+    case InputData::MouseButton::MIDDLE: return "MIDDLE";
+    case InputData::MouseButton::RIGHT:  return "RIGHT";
+    }
+    return "";
+}
+
+/// 鼠标动作 → 显示串。
+inline constexpr std::string_view MousePrintf(InputData::MouseAction a) {
+    switch (a) {
+    case InputData::MouseAction::RELEASE:     return "RELEASE";
+    case InputData::MouseAction::PRESS:       return "PRESS";
+    case InputData::MouseAction::DRAG:        return "DRAG";
+    case InputData::MouseAction::MOVE:        return "MOVE";
+    case InputData::MouseAction::SCROLL_UP:   return "SCROLL_UP";
+    case InputData::MouseAction::SCROLL_DOWN: return "SCROLL_DOWN";
+    }
+    return "";
+}
+
+/// 完整鼠标事件 → 显示串。
+/// 例：MousePrintf(m) == "<MOUSE (5,7) LEFT PRESS Ctrl>"
+inline std::string MousePrintf(const InputData::MouseData& m) {
+    std::string s = "<MOUSE (";
+    s += std::to_string(m.col);
+    s += ",";
+    s += std::to_string(m.row);
+    s += ")";
+    if (m.button != InputData::MouseButton::NONE) {
+        s += " ";
+        s += MousePrintf(m.button);
+    }
+    s += " ";
+    s += MousePrintf(m.action);
+    if (m.isCtrl)  s += " Ctrl";
+    if (m.isAlt)   s += " Alt";
+    if (m.isShift) s += " Shift";
+    s += ">";
+    return s;
+}
+
+/// 任意输入事件 → 显示串（键盘走 KeyPrintf，鼠标走 MousePrintf）。
+inline std::string InputPrintf(const InputData& e) {
+    switch (e.inputType) {
+    case InputData::InputType::KEYBD: return KeyPrintf(e.value.keybd);
+    case InputData::InputType::MOUSE: return MousePrintf(e.value.mouse);
+    case InputData::InputType::NON:   return "";
+    }
+    return "";
+}
+
+// ===========================================================================
 //  input_fsm — 输入状态机（内部实现）
 // ===========================================================================
 //
