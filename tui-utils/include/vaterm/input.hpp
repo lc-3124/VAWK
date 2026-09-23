@@ -1020,37 +1020,27 @@ class input {
     /**
      * vaterm::input::getInput(...)
      *
-     * 非阻塞：返回缓冲区里符合 type 的最新事件；没有则返回 NON 空包。
+     * 非阻塞读取：从缓冲区历史里取最新的一条事件，不取走、不消费。
+     *   getInput(type) ：符合 type 的最新事件
+     *   getInput()     ：不限类型，取最新的一条
      *
      * 参数：
      * InputData::InputType type ， 想要的类型；传 NON 表示不限类型
      *
      * 返回:
-     * InputData , 最新的一条匹配事件，或 NON
+     * InputData , 最新的一条匹配事件；没有则 NON
      *
-     * lc3124(260923):遍历历史取“最新”匹配项，不取走、不消费。
+     * lc3124(260923):无参版本等价于 getInput(NON)。
      */
     InputData getInput(InputData::InputType type);
-
-    /**
-     * vaterm::input::getInput()
-     *
-     * 非阻塞：返回缓冲区里最新的一条事件（不限类型）。
-     *
-     * 参数：
-     * 无
-     *
-     * 返回:
-     * InputData , 最新事件，或 NON
-     *
-     * lc3124(260923):等价于 getInput(NON)。
-     */
     InputData getInput();
 
     /**
      * vaterm::input::waitInput(...)
      *
-     * 阻塞：等待新的符合 type 的事件（不取走、不消费）。
+     * 阻塞等待新的匹配事件，不取走、不消费。
+     *   waitInput(type, timeout_ms) ：等待符合 type 的新事件
+     *   waitInput(timeout_ms)       ：不限类型，等待任意新事件
      *
      * 参数：
      * InputData::InputType type ， 想要的类型；传 NON 表示不限类型
@@ -1062,20 +1052,6 @@ class input {
      * lc3124(260923):只看“最近更新的那一条”，它既要是新的、又要类型匹配。
      */
     InputData waitInput(InputData::InputType type, int timeout_ms = -1);
-
-    /**
-     * vaterm::input::waitInput(...)
-     *
-     * 阻塞：等待新的任意事件。
-     *
-     * 参数：
-     * int timeout_ms ， 负数无限等待；>= 0 有限等待
-     *
-     * 返回:
-     * InputData , 新事件；超时或被 stop 返回 NON
-     *
-     * lc3124(260923):等价于 waitInput(NON, timeout_ms)。
-     */
     InputData waitInput(int timeout_ms = -1);
 
   private:
@@ -1117,6 +1093,7 @@ class input {
     std::uint64_t           seq_ = 0;  ///< 最近一次写入的序号
     mutable std::mutex      m_;
     std::mutex              lifecycle_;   ///< 串行化 start/stop
+    bool                    started_ = false;  ///< 是否已接管终端（供 stop 判断是否恢复）
     std::condition_variable cv_;          ///< 用于waitInput消费者
     std::atomic<bool>       running_{false};
     std::atomic<bool>       mouse_enabled_{false};
@@ -1144,6 +1121,7 @@ inline bool input::start() {
 
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
+    started_ = true;
     {
         std::lock_guard<std::mutex> lock(m_);
         buffer_.clear();
@@ -1168,8 +1146,12 @@ inline bool input::stop() {
         buffer_.clear();
         seq_ = 0;
     }
-    terminal::write("\033[?1006l\033[?1002l\033[?1000l");
-    terminal::flush();
+    // 只有真正接管过终端才写关闭序列（没跑过就不打扰终端）。
+    if (started_) {
+        terminal::write("\033[?1006l\033[?1002l\033[?1000l");
+        terminal::flush();
+        started_ = false;
+    }
     state_ = InputMode::OFF;
     return true;
 }
