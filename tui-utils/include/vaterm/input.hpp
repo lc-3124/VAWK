@@ -24,6 +24,7 @@
 #include <utility>
 
 #include <poll.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include "term.hpp"
@@ -950,7 +951,7 @@ class input {
      * 返回:
      * bool , 成功返回 true
      *
-     * lc3124(260923):raw mode 需调用方预先开启，本函数不负责。
+     * lc3124(260923):raw mode 需调用方预先开启；未处于 raw 模式时返回 false、不启动。
      */
     bool start();
 
@@ -1131,10 +1132,16 @@ inline input::input() = default;
 inline input::~input() { stop(); }
 
 inline bool input::start() {
-
-    // TODO 要检查终端是不是已经在raw模式下，如果不是，就返回false并且不真正启动输入框架
     std::lock_guard<std::mutex> lk(lifecycle_);
     if (running_) return true;
+
+    // 终端必须已经处于 raw 模式（非规范模式）：否则不接管输入，直接返回 false。
+    struct termios tio{};
+    if (::tcgetattr(STDIN_FILENO, &tio) != 0 || (tio.c_lflag & ICANON) != 0) {
+        state_ = InputMode::INPUT_DISABLE;
+        return false;
+    }
+
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
     terminal::flush();
     {
