@@ -28,8 +28,14 @@
 
 #include "term.hpp"
 
-/// 环形缓冲容量：只保留最近 VATERM_INPUT_BUFFER_SIZE 条事件，超出丢弃最旧的。
-/// 可在编译期用 -DVATERM_INPUT_BUFFER_SIZE=N 覆盖。
+/**
+ * VATERM_INPUT_BUFFER_SIZE
+ *
+ * 环形缓冲容量：只保留最近 VATERM_INPUT_BUFFER_SIZE 条事件，超出丢弃最旧的。
+ * 可在编译期用 -DVATERM_INPUT_BUFFER_SIZE=N 覆盖。
+ *
+ * lc3124(260923):取 16，兼顾内存占用与可回溯的“历史”长度。
+ */
 #ifndef VATERM_INPUT_BUFFER_SIZE
 #define VATERM_INPUT_BUFFER_SIZE 16
 #endif
@@ -40,12 +46,25 @@ namespace vaterm {
 //  InputData — 输入数据包
 // ===========================================================================
 
-/// 输入数据包：状态机解析出的一个键盘或鼠标事件
+/**
+ * vaterm::InputData
+ *
+ * 输入数据包：状态机解析出的一个键盘或鼠标事件。
+ *
+ * lc3124(260923):用 inputType 做标签、联合体承载键/鼠负载以减少空间浪费；
+ * 读取时先看 inputType 再取对应成员。
+ */
 struct InputData {
     // ── 子结构定义 ─────────────────────────────────────────────────────────
     // ───────────────────────────────────────────────────────────────────────
 
-    /// 数据包类型，决定联合体中哪个负载成员有效
+    /**
+     * vaterm::InputData::InputType
+     *
+     * 数据包类型，决定联合体中哪个负载成员有效。
+     *
+     * lc3124(260923):NON 表示“空包”，非阻塞读取没有事件时返回它。
+     */
     enum class InputType : uint8_t {
         MOUSE = 0,  ///< 鼠标事件
         KEYBD = 1,  ///< 键盘事件
@@ -54,7 +73,13 @@ struct InputData {
 
     // ── 鼠标 ─────────────────────────────────────────────────────────
 
-    /// 鼠标按键
+    /**
+     * vaterm::InputData::MouseButton
+     *
+     * 鼠标按键。
+     *
+     * lc3124(260923):滚轮、松开用不到具体按键，归为 NONE。
+     */
     enum class MouseButton : uint8_t {
         NONE = 0,  ///< 无按键（滚轮、松开）
         LEFT,      ///< 左键
@@ -62,7 +87,14 @@ struct InputData {
         RIGHT      ///< 右键
     };
 
-    /// 鼠标动作
+    /**
+     * vaterm::InputData::MouseAction
+     *
+     * 鼠标动作。
+     *
+     * lc3124(260923):由 SGR 的 Cb 推导：终止符 M/m→按下/松开，bit5→移动
+     * （无键为 MOVE、有键为 DRAG），bit6→滚轮（方向看最低位）。
+     */
     enum class MouseAction : uint8_t {
         RELEASE = 0,  ///< 松开
         PRESS,        ///< 按下
@@ -72,7 +104,13 @@ struct InputData {
         SCROLL_DOWN   ///< 滚轮下滚
     };
 
-    /// 鼠标事件负载（坐标为 0 起）
+    /**
+     * vaterm::InputData::MouseData
+     *
+     * 鼠标事件负载（坐标为 0 起）。
+     *
+     * lc3124(260923):修饰键单独存 bool，避免用户做位运算。
+     */
     struct MouseData {
         int         col     = 0;                     ///< 列
         int         row     = 0;                     ///< 行
@@ -85,7 +123,13 @@ struct InputData {
 
     // ── 键盘 ─────────────────────────────────────────────────────────
 
-    /// 键盘特殊键码（可打印键请用 KeybdData::cp，此时 code 保持 NONE）
+    /**
+     * vaterm::InputData::KeyCode
+     *
+     * 键盘特殊键码（可打印键请用 KeybdData::cp，此时 code 保持 NONE）。
+     *
+     * lc3124(260923):特殊键无法用字符表示，用枚举区分；书面值交给 KeyPrintf。
+     */
     enum class KeyCode : int {
         NONE = 0,
         UP, DOWN, LEFT, RIGHT,
@@ -95,9 +139,13 @@ struct InputData {
         ESC, TAB, ENTER, BACKSPACE
     };
 
-
-
-    /// 键盘事件负载
+    /**
+     * vaterm::InputData::KeybdData
+     *
+     * 键盘事件负载。
+     *
+     * lc3124(260923):cp 存 Unicode 码点（含 CJK）；修饰键用 bool。
+     */
     struct KeybdData {
         char32_t cp      = 0;              ///< 可打印键的 Unicode 码点（无则 0）
         KeyCode  code    = KeyCode::NONE;  ///< 特殊键码（无则 NONE）
@@ -111,7 +159,14 @@ struct InputData {
 
     InputType inputType = InputType::NON;  ///< 当前包的类型
 
-    /// 事件负载；按 inputType 读取 mouse 或 keybd。
+    /**
+     * vaterm::InputData::Value
+     *
+     * 事件负载；按 inputType 读取 mouse 或 keybd。
+     *
+     * lc3124(260923):联合体成员带默认成员初始值，故自定义构造/析构；默认不
+     * 初始化任何成员，由 inputType 决定读哪一个，由 makeMouse/makeKeybd 写入。
+     */
     union Value {
         MouseData mouse;  ///< 鼠标
         KeybdData keybd;  ///< 键盘
@@ -122,11 +177,39 @@ struct InputData {
 
     // ── 构造数据包 ─────────────────────────────────────────────────────────
 
+    /**
+     * vaterm::InputData::InputData()
+     *
+     * 构造一个空包（inputType = NON）。
+     *
+     * lc3124(260923):空包用于表达“没有事件”。
+     */
     InputData();
 
-    /// 构造鼠标包
+    /**
+     * vaterm::InputData::makeMouse(...)
+     *
+     * 参数：
+     * const MouseData& m ， 鼠标负载
+     *
+     * 返回:
+     * InputData , inputType 为 MOUSE 的数据包
+     *
+     * lc3124(260923):统一在这里设置标签和负载，避免用户手写联合体。
+     */
     static InputData makeMouse(const MouseData& m);
-    /// 构造键盘包
+
+    /**
+     * vaterm::InputData::makeKeybd(...)
+     *
+     * 参数：
+     * const KeybdData& k ， 键盘负载
+     *
+     * 返回:
+     * InputData , inputType 为 KEYBD 的数据包
+     *
+     * lc3124(260923):统一在这里设置标签和负载，避免用户手写联合体。
+     */
     static InputData makeKeybd(const KeybdData& k);
 };
 
@@ -152,11 +235,24 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
     return d;
 }
 
-// ===========================================================================
-//  KeyPrintf — 键的显示字符串
-// ===========================================================================
+/**
+ * lc3124(260923):
+ * 此处设计一套方案让用户拿到键码之后可以通过InputPrintf()来获取这个键码对于的书面打印值
+ * 以便于用户输键码，避免解析键码为书面值的相关代码污染用户的业务。
+ */
 
-/// 把 Unicode 码点编码成 UTF-8 字符串（供 KeyPrintf 复用；将来可移入 vaterm::utf）。
+/**
+ * vaterm::encode_utf8(...)
+ *
+ * 参数：
+ * char32_t cp ， 用于......
+ *
+ * 返回:
+ * std::string , 表示.....
+ *
+ * lc3124(260923):把 Unicode 码点编码成 UTF-8 字符串（供 KeyPrintf 复用；虽然和vaterm::utf模块的职责
+ * 交叉，但是这个模块是输入引擎的必要功能，我设计让它和其他模块解耦）。
+ */
 inline std::string encode_utf8(char32_t cp) {
     std::string s;
     if (cp < 0x80) {
@@ -177,8 +273,19 @@ inline std::string encode_utf8(char32_t cp) {
     return s;
 }
 
-/// 特殊键码 → 显示串；可打印键（code == NONE）返回空串。
-/// 例：KeyPrintf(InputData::KeyCode::F11) == "<F11>"
+/**
+ * vaterm::KeyPrintf(InputData::KeyCode code)
+ *
+ * 特殊键码 → 显示串；可打印键（code == NONE）返回空串。
+ *
+ * 参数：
+ * InputData::KeyCode code ， 要打印的特殊键码
+ *
+ * 返回:
+ * std::string_view , 形如 "<F11>"、"<UP>"；NONE 返回 ""
+ *
+ * lc3124(260923):例：KeyPrintf(InputData::KeyCode::F11) == "<F11>"。
+ */
 inline constexpr std::string_view KeyPrintf(InputData::KeyCode code) {
     switch (code) {
     case InputData::KeyCode::NONE:      return "";
@@ -212,9 +319,20 @@ inline constexpr std::string_view KeyPrintf(InputData::KeyCode code) {
     return "";
 }
 
-/// 完整键（含普通键）→ 显示串：
-///   无修饰的普通键 → 字符本身（"a"、"中"）
-///   其余           → "<Ctrl+a>"、"<Shift+UP>"、"<F11>"
+/**
+ * vaterm::KeyPrintf(const InputData::KeybdData& key)
+ *
+ * 完整键（含普通键）→ 显示串。
+ *
+ * 参数：
+ * const InputData::KeybdData& key ， 键盘负载
+ *
+ * 返回:
+ * std::string , 无修饰的普通键返回字符本身（"a"、"中"）；
+ *               其余返回 "<Ctrl+a>"、"<Shift+UP>"、"<F11>"
+ *
+ * lc3124(260923):把“键码 → 书面值”的解析收进本模块，避免污染用户业务。
+ */
 inline std::string KeyPrintf(const InputData::KeybdData& key) {
     const bool special = key.code != InputData::KeyCode::NONE;
 
@@ -237,7 +355,19 @@ inline std::string KeyPrintf(const InputData::KeybdData& key) {
 //  MousePrintf / InputPrintf — 鼠标与通用事件的显示字符串
 // ===========================================================================
 
-/// 鼠标按键 → 显示串。
+/**
+ * vaterm::MousePrintf(InputData::MouseButton b)
+ *
+ * 鼠标按键 → 显示串。
+ *
+ * 参数：
+ * InputData::MouseButton b ， 鼠标按键
+ *
+ * 返回:
+ * std::string_view , "NONE"/"LEFT"/"MIDDLE"/"RIGHT"
+ *
+ * lc3124(260923):供 MousePrintf(MouseData) 与用户直接取用。
+ */
 inline constexpr std::string_view MousePrintf(InputData::MouseButton b) {
     switch (b) {
     case InputData::MouseButton::NONE:   return "NONE";
@@ -248,7 +378,19 @@ inline constexpr std::string_view MousePrintf(InputData::MouseButton b) {
     return "";
 }
 
-/// 鼠标动作 → 显示串。
+/**
+ * vaterm::MousePrintf(InputData::MouseAction a)
+ *
+ * 鼠标动作 → 显示串。
+ *
+ * 参数：
+ * InputData::MouseAction a ， 鼠标动作
+ *
+ * 返回:
+ * std::string_view , "PRESS"/"RELEASE"/"DRAG"/"MOVE"/"SCROLL_UP"/"SCROLL_DOWN"
+ *
+ * lc3124(260923):供 MousePrintf(MouseData) 与用户直接取用。
+ */
 inline constexpr std::string_view MousePrintf(InputData::MouseAction a) {
     switch (a) {
     case InputData::MouseAction::RELEASE:     return "RELEASE";
@@ -261,8 +403,19 @@ inline constexpr std::string_view MousePrintf(InputData::MouseAction a) {
     return "";
 }
 
-/// 完整鼠标事件 → 显示串。
-/// 例：MousePrintf(m) == "<MOUSE (5,7) LEFT PRESS Ctrl>"
+/**
+ * vaterm::MousePrintf(const InputData::MouseData& m)
+ *
+ * 完整鼠标事件 → 显示串。
+ *
+ * 参数：
+ * const InputData::MouseData& m ， 鼠标负载
+ *
+ * 返回:
+ * std::string , 形如 "<MOUSE (5,7) LEFT PRESS Ctrl>"
+ *
+ * lc3124(260923):无按键（滚轮/悬停）时省略按键段。
+ */
 inline std::string MousePrintf(const InputData::MouseData& m) {
     std::string s = "<MOUSE (";
     s += std::to_string(m.col);
@@ -282,7 +435,19 @@ inline std::string MousePrintf(const InputData::MouseData& m) {
     return s;
 }
 
-/// 任意输入事件 → 显示串（键盘走 KeyPrintf，鼠标走 MousePrintf）。
+/**
+ * vaterm::InputPrintf(const InputData& e)
+ *
+ * 任意输入事件 → 显示串（键盘走 KeyPrintf，鼠标走 MousePrintf）。
+ *
+ * 参数：
+ * const InputData& e ， 任意输入事件
+ *
+ * 返回:
+ * std::string , 事件的书面表示；NON 返回 ""
+ *
+ * lc3124(260923):给用户一个统一的打印入口，键鼠通吃。
+ */
 inline std::string InputPrintf(const InputData& e) {
     switch (e.inputType) {
     case InputData::InputType::KEYBD: return KeyPrintf(e.value.keybd);
@@ -292,36 +457,102 @@ inline std::string InputPrintf(const InputData& e) {
     return "";
 }
 
-// ===========================================================================
-//  input_fsm — 输入状态机（内部实现）
-// ===========================================================================
-//
-//  把终端字节流解析成 InputData 事件。之所以单独成一个类，是为了能脱离
-//  终端、直接喂字节来测试；正常使用请通过 vaterm::input。
-//
-//  状态转移：
-//    GROUND ─ 0x1B ─► ESC
-//    ESC    ─ '['  ─► CSI ── 第 3 字节为 '<' ─► MOUSE
-//                  └─ 终止符 0x40-0x7E ─► GROUND（键盘序列）
-//    ESC    ─ 'O'  ─► SS3 ─ 1 字节 ─► GROUND
-//    ESC    ─ 可打印 ─► GROUND（Alt+键）
-//    ESC    ─ 其它  ─► GROUND（产出 Esc，并把该字节重新按 GROUND 处理）
-//    GROUND ─ 0xC2-0xF7 ─► UTF8 ─ 后续字节 ─► GROUND
-//    MOUSE  ─ 累积到 'M'/'m' ─► GROUND（超长则丢弃）
-// ===========================================================================
+/**
+ * vaterm::input_fsm — 输入状态机（内部实现）
+ *
+ * 把终端字节流解析成 InputData 事件。之所以单独成一个类，是为了能脱离
+ * 终端、直接喂字节来测试；正常使用请通过 vaterm::input。
+ *
+ * 状态转移：
+ *   GROUND ─ 0x1B ─► ESC
+ *   ESC    ─ '['  ─► CSI ── 第 3 字节为 '<' ─► MOUSE
+ *                 └─ 终止符 0x40-0x7E ─► GROUND（键盘序列）
+ *   ESC    ─ 'O'  ─► SS3 ─ 1 字节 ─► GROUND
+ *   ESC    ─ 可打印 ─► GROUND（Alt+键）
+ *   ESC    ─ 其它  ─► GROUND（产出 Esc，并把该字节重新按 GROUND 处理）
+ *   GROUND ─ 0xC2-0xF7 ─► UTF8 ─ 后续字节 ─► GROUND
+ *   MOUSE  ─ 累积到 'M'/'m' ─► GROUND（超长则丢弃）
+ *
+ * lc3124(260923):独立成类是为了可测试；对外只暴露 vaterm::input。
+ */
 
 class input_fsm {
   public:
-    /// 喂入一个字节，解析出的事件追加到 out。
+    /**
+     * vaterm::input_fsm::feed(unsigned char b, std::deque<InputData>& out)
+     *
+     * 喂入一个字节，解析出的事件追加到 out。
+     *
+     * 参数：
+     * unsigned char b ， 输入字节
+     * std::deque<InputData>& out ， 事件输出队列
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):同一字节可能在新状态下被重新处理，见各 step_* 的返回值。
+     */
     void feed(unsigned char b, std::deque<InputData>& out);
-    /// 喂入一段字节。
+
+    /**
+     * vaterm::input_fsm::feed(std::string_view bytes, std::deque<InputData>& out)
+     *
+     * 喂入一段字节。
+     *
+     * 参数：
+     * std::string_view bytes ， 输入字节串
+     * std::deque<InputData>& out ， 事件输出队列
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):逐字节转发给单字节版本。
+     */
     void feed(std::string_view bytes, std::deque<InputData>& out);
 
-    /// 是否有尚未完成的序列（半截 CSI / 鼠标 / UTF-8，或孤立的 ESC）。
+    /**
+     * vaterm::input_fsm::pending() const
+     *
+     * 是否有尚未完成的序列。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * bool , true 表示停在半截序列（CSI / 鼠标 / UTF-8 / 孤立 ESC）
+     *
+     * lc3124(260923):供调用方判断是否需要继续等后续字节。
+     */
     bool pending() const;
-    /// 超时调用：把孤立的 ESC 收敛成 Esc 键事件；其它半截序列保留等待后续字节。
+
+    /**
+     * vaterm::input_fsm::flush_pending(std::deque<InputData>& out)
+     *
+     * 超时收尾：把孤立的 ESC 收敛成 Esc 键事件。
+     *
+     * 参数：
+     * std::deque<InputData>& out ， 事件输出队列
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):其它半截序列保留，继续等待后续字节。
+     */
     void flush_pending(std::deque<InputData>& out);
-    /// 复位（丢弃半截序列）。
+
+    /**
+     * vaterm::input_fsm::reset()
+     *
+     * 复位状态机（丢弃半截序列）。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):解析成功或失步时调用。
+     */
     void reset();
 
   private:
@@ -330,12 +561,40 @@ class input_fsm {
     State       state_ = State::GROUND;
     std::string acc_;  ///< 当前序列已累积的字节
 
-    /// 构造一个键盘事件追加到 out。
+    /**
+     * vaterm::input_fsm::push_key(...)
+     *
+     * 构造一个键盘事件追加到 out。
+     *
+     * 参数：
+     * std::deque<InputData>& out ， 事件输出队列
+     * char32_t cp ， 可打印键的码点（特殊键传 0）
+     * InputData::KeyCode code ， 特殊键码
+     * bool shift/alt/ctrl ， 修饰键
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):统一走 InputData::makeKeybd。
+     */
     static void push_key(std::deque<InputData>& out, char32_t cp,
                          InputData::KeyCode code,
                          bool shift = false, bool alt = false, bool ctrl = false);
 
-    // 各状态处理；返回 true 表示同一字节需在新状态下重新处理。
+    /**
+     * vaterm::input_fsm::step_* 系列
+     *
+     * 各状态处理函数。
+     *
+     * 参数：
+     * unsigned char b ， 当前字节
+     * std::deque<InputData>& out ， 事件输出队列
+     *
+     * 返回:
+     * bool , true 表示同一字节需在新状态下重新处理
+     *
+     * lc3124(260923):GROUND/ESC/CSI/SS3/MOUSE/UTF8 各一个。
+     */
     bool step_ground(unsigned char b, std::deque<InputData>& out);
     bool step_esc(unsigned char b, std::deque<InputData>& out);
     bool step_csi(unsigned char b, std::deque<InputData>& out);
@@ -343,9 +602,37 @@ class input_fsm {
     bool step_mouse(unsigned char b, std::deque<InputData>& out);
     bool step_utf8(unsigned char b, std::deque<InputData>& out);
 
-    /// 解析 CSI 键盘序列（params 为去头去尾后的参数串，final 为终止字节）。
+    /**
+     * vaterm::input_fsm::parse_csi(...)
+     *
+     * 解析 CSI 键盘序列。
+     *
+     * 参数：
+     * std::string_view params ， 去头去尾后的参数串
+     * char final ， 终止字节
+     * std::deque<InputData>& out ， 事件输出队列
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):参数形如 "n" 或 "n;m"，m 是修饰键编码。
+     */
     static void parse_csi(std::string_view params, char final, std::deque<InputData>& out);
-    /// 解析一条完整的 SGR 鼠标序列（\033[<Cb;Cx;CyM/m）。
+
+    /**
+     * vaterm::input_fsm::parse_mouse(...)
+     *
+     * 解析一条完整的 SGR 鼠标序列。
+     *
+     * 参数：
+     * const std::string& seq ， 形如 \033[<Cb;Cx;CyM/m
+     * std::deque<InputData>& out ， 事件输出队列
+     *
+     * 返回:
+     * 无
+     *
+     * lc3124(260923):坐标系 1 起转 0 起；滚轮方向取 Cb 最低位。
+     */
     static void parse_mouse(const std::string& seq, std::deque<InputData>& out);
 };
 
@@ -602,29 +889,34 @@ inline void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>
     out.push_back(InputData::makeMouse(m));
 }
 
-// ===========================================================================
-//  input — 输入模块
-// ===========================================================================
-//
-//  接管终端输入：start() 开启鼠标追踪并启动后台解析线程；线程把 stdin 的
-//  字节喂给 input_fsm，产出的 InputData 放进定长环形缓冲（只保留最近若干条，
-//  为了省内存，已入队事件不会被取走）；消费者用 getInput() 查询最新事件，
-//  或用 waitInput() 等待新的匹配事件。stop() 停线程、关鼠标追踪。
-//  （raw 模式的进入/退出不属于本模块，由调用方负责。）
-//
-//  线程安全：getInput() / waitInput() / getState() 可与后台线程并发调用。
-// ===========================================================================
+/**
+ * vaterm::input — 输入模块
+ *
+ * 接管终端输入：start() 开启鼠标追踪并启动后台解析线程；线程把 stdin 的
+ * 字节喂给 input_fsm，产出的 InputData 放进定长环形缓冲（只保留最近若干条，
+ * 为了省内存，已入队事件不会被取走）；消费者用 getInput() 查询最新事件，
+ * 或用 waitInput() 等待新的匹配事件。stop() 停线程、关鼠标追踪。
+ * （raw 模式的进入/退出不属于本模块，由调用方负责。）
+ *
+ * 线程安全：getInput() / waitInput() / getState() 可与后台线程并发调用。
+ *
+ * lc3124(260923):对外只暴露 start/stop、enableMouse/enableKeyBd、getInput/waitInput/getState。
+ */
 
 class input {
   public:
     /**
-     * 枚举类型
+     * vaterm::input::InputMode
+     *
+     * 模块工作状态。
      *
      * ON ，鼠标键盘启动，模块工作中。
      * 2 , 鼠标没有启动，如果执行`enableMouse`返回这个值，说明终端不兼容鼠标。
      * 3 , 鼠标启动了，但是键盘拿不到，显示这个一定是终端兼容出了问题
      * 0 ，键盘鼠标输入都是无效的，
      * 4 , 模块没有开启输入代理，输入由系统负责
+     *
+     * lc3124(260923):数值按上面的语义约定。
      */
     enum class InputMode : uint8_t {
         ON = true,
@@ -639,36 +931,154 @@ class input {
     input(const input&) = delete;
     input& operator=(const input&) = delete;
 
-    /// 用户接触的接口
+    /** 用户接触的接口 */
 
-    /// 接管输入：开启鼠标追踪、启动后台解析线程。成功返回 true。
+    /**
+     * vaterm::input::start()
+     *
+     * 接管输入：开启鼠标追踪、启动后台解析线程。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * bool , 成功返回 true
+     *
+     * lc3124(260923):raw mode 需调用方预先开启，本函数不负责。
+     */
     bool start();
-    /// 交还输入：停线程、关闭鼠标追踪。成功返回 true。
+
+    /**
+     * vaterm::input::stop()
+     *
+     * 交还输入：停线程、关闭鼠标追踪。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * bool , 成功返回 true
+     *
+     * lc3124(260923):幂等，可并发调用；析构会自动调用。
+     */
     bool stop();
 
-    /// 开启 / 关闭鼠标追踪（需已 start）。成功返回 true。
+    /**
+     * vaterm::input::enableMouse() / disableMouse()
+     *
+     * 开启 / 关闭鼠标追踪。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * bool , 成功返回 true（未 start 返回 false）
+     *
+     * lc3124(260923):开关会同步更新 getState()。
+     */
     bool enableMouse();
     bool disableMouse();
-    /// 开启 / 关闭键盘事件（关闭后键盘事件被丢弃，仍会被解析）。成功返回 true。
+
+    /**
+     * vaterm::input::enableKeyBd() / disableKeyBd()
+     *
+     * 开启 / 关闭键盘事件。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * bool , 成功返回 true（未 start 返回 false）
+     *
+     * lc3124(260923):关闭后键盘事件被丢弃，但仍会被解析。
+     */
     bool enableKeyBd();
     bool disableKeyBd();
 
-    /// 查询当前工作状态（ON / OFF / MOUSE_DISABLE / KEYBD_DISABLE / INPUT_DISABLE）。
+    /**
+     * vaterm::input::getState() const
+     *
+     * 查询当前工作状态。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * InputMode , ON / OFF / MOUSE_DISABLE / KEYBD_DISABLE / INPUT_DISABLE
+     *
+     * lc3124(260923):线程安全，可随时调用。
+     */
     InputMode getState() const;
 
-    /// 非阻塞：返回缓冲区里符合 type 的**最新**事件；没有则返回 NON 空包。
-    /// type 传 NON 表示不限类型（取最新的一条任意事件）。
+    /**
+     * vaterm::input::getInput(...)
+     *
+     * 非阻塞：返回缓冲区里符合 type 的最新事件；没有则返回 NON 空包。
+     *
+     * 参数：
+     * InputData::InputType type ， 想要的类型；传 NON 表示不限类型
+     *
+     * 返回:
+     * InputData , 最新的一条匹配事件，或 NON
+     *
+     * lc3124(260923):遍历历史取“最新”匹配项，不取走、不消费。
+     */
     InputData getInput(InputData::InputType type);
+
+    /**
+     * vaterm::input::getInput()
+     *
+     * 非阻塞：返回缓冲区里最新的一条事件（不限类型）。
+     *
+     * 参数：
+     * 无
+     *
+     * 返回:
+     * InputData , 最新事件，或 NON
+     *
+     * lc3124(260923):等价于 getInput(NON)。
+     */
     InputData getInput();
 
-    /// 阻塞：等待**新的**符合 type 的事件（不取走、不消费）。
-    /// timeout_ms < 0 无限等待；>= 0 有限等待，超时返回 NON 空包。
-    /// type 传 NON 表示不限类型。
+    /**
+     * vaterm::input::waitInput(...)
+     *
+     * 阻塞：等待新的符合 type 的事件（不取走、不消费）。
+     *
+     * 参数：
+     * InputData::InputType type ， 想要的类型；传 NON 表示不限类型
+     * int timeout_ms ， 负数无限等待；>= 0 有限等待
+     *
+     * 返回:
+     * InputData , 新的匹配事件；超时或被 stop 返回 NON
+     *
+     * lc3124(260923):只看“最近更新的那一条”，它既要是新的、又要类型匹配。
+     */
     InputData waitInput(InputData::InputType type, int timeout_ms = -1);
+
+    /**
+     * vaterm::input::waitInput(...)
+     *
+     * 阻塞：等待新的任意事件。
+     *
+     * 参数：
+     * int timeout_ms ， 负数无限等待；>= 0 有限等待
+     *
+     * 返回:
+     * InputData , 新事件；超时或被 stop 返回 NON
+     *
+     * lc3124(260923):等价于 waitInput(NON, timeout_ms)。
+     */
     InputData waitInput(int timeout_ms = -1);
 
   private:
-    /// 缓冲条目：事件 + 单调递增写入序号（用于判断"是不是新的"）。
+    /**
+     * vaterm::input::Entry
+     *
+     * 缓冲条目：事件 + 单调递增写入序号。
+     *
+     * lc3124(260923):序号用于判断“是不是新的”，从而不需要每读者游标。
+     */
     struct Entry {
         std::uint64_t seq;
         InputData     data;
@@ -678,7 +1088,20 @@ class input {
     void enqueue(std::deque<InputData>& produced);
     void update_state();
 
-    // 以下需在持有 m_ 时调用。
+    /**
+     * vaterm::input::match(...) / latest(...)
+     *
+     * 在持有 m_ 时调用的查询辅助。
+     *
+     * 参数：
+     * InputData::InputType type ， 想要的类型；NON 表示不限
+     * const InputData& d ， 待判定的数据包
+     *
+     * 返回:
+     * match → bool ；latest → InputData
+     *
+     * lc3124(260923):只服务于 getInput 的“取最新”查询。
+     */
     static bool match(InputData::InputType type, const InputData& d);
     InputData   latest(InputData::InputType type) const;   ///< 历史里最新的匹配项
 
@@ -703,7 +1126,7 @@ inline input::~input() { stop(); }
 
 inline bool input::start() {
 
-  ///TODO 要检查终端是不是已经在raw模式下，如果不是，就返回false并且不真正启动输入框架
+    // TODO 要检查终端是不是已经在raw模式下，如果不是，就返回false并且不真正启动输入框架
     std::lock_guard<std::mutex> lk(lifecycle_);
     if (running_) return true;
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
