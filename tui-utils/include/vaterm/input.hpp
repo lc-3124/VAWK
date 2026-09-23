@@ -2,10 +2,14 @@
 #define VATERM_INPUT_HPP
 
 /**
- * 我打算重新设计输入模块，区别于以前通过获取鼠标输入后手动调用parse()来解析
+ * 2026-09-22,lc3124:
+ * 我重新设计了输入模块，区别于以前通过获取鼠标输入后手动调用parse()来解析
  * 相关数据，这次我打算完全接管终端模拟器的全部输入，在用户层面不再使用系统的
  * 原生输入。使用状态机来解析输入，解析的结果填入缓冲队列，消费者从缓冲队列
  * 获取键盘和鼠标的输入事件。
+ *
+ * TODO 目前还在编写这些代码并且进行测试，在测试和审查完成之后，我会分离定义
+ * 和实现。
  */
 
 #include <atomic>
@@ -91,6 +95,8 @@ struct InputData {
         ESC, TAB, ENTER, BACKSPACE
     };
 
+
+
     /// 键盘事件负载
     struct KeybdData {
         char32_t cp      = 0;              ///< 可打印键的 Unicode 码点（无则 0）
@@ -144,6 +150,87 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
     d.inputType   = InputType::KEYBD;
     d.value.keybd = k;
     return d;
+}
+
+// ===========================================================================
+//  KeyValue — 键的显示字符串
+// ===========================================================================
+
+/// 把 Unicode 码点编码成 UTF-8 字符串（供 KeyValue 复用；将来可移入 vaterm::utf）。
+inline std::string encode_utf8(char32_t cp) {
+    std::string s;
+    if (cp < 0x80) {
+        s += static_cast<char>(cp);
+    } else if (cp < 0x800) {
+        s += static_cast<char>(0xC0 | (cp >> 6));
+        s += static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        s += static_cast<char>(0xE0 | (cp >> 12));
+        s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        s += static_cast<char>(0x80 | (cp & 0x3F));
+    } else {
+        s += static_cast<char>(0xF0 | (cp >> 18));
+        s += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        s += static_cast<char>(0x80 | (cp & 0x3F));
+    }
+    return s;
+}
+
+/// 特殊键码 → 显示串；可打印键（code == NONE）返回空串。
+/// 例：KeyValue(InputData::KeyCode::F11) == "<F11>"
+inline constexpr std::string_view KeyValue(InputData::KeyCode code) {
+    switch (code) {
+    case InputData::KeyCode::NONE:      return "";
+    case InputData::KeyCode::UP:        return "<UP>";
+    case InputData::KeyCode::DOWN:      return "<DOWN>";
+    case InputData::KeyCode::LEFT:      return "<LEFT>";
+    case InputData::KeyCode::RIGHT:     return "<RIGHT>";
+    case InputData::KeyCode::HOME:      return "<HOME>";
+    case InputData::KeyCode::END:       return "<END>";
+    case InputData::KeyCode::PGUP:      return "<PGUP>";
+    case InputData::KeyCode::PGDN:      return "<PGDN>";
+    case InputData::KeyCode::INS:       return "<INS>";
+    case InputData::KeyCode::DEL:       return "<DEL>";
+    case InputData::KeyCode::F1:        return "<F1>";
+    case InputData::KeyCode::F2:        return "<F2>";
+    case InputData::KeyCode::F3:        return "<F3>";
+    case InputData::KeyCode::F4:        return "<F4>";
+    case InputData::KeyCode::F5:        return "<F5>";
+    case InputData::KeyCode::F6:        return "<F6>";
+    case InputData::KeyCode::F7:        return "<F7>";
+    case InputData::KeyCode::F8:        return "<F8>";
+    case InputData::KeyCode::F9:        return "<F9>";
+    case InputData::KeyCode::F10:       return "<F10>";
+    case InputData::KeyCode::F11:       return "<F11>";
+    case InputData::KeyCode::F12:       return "<F12>";
+    case InputData::KeyCode::ESC:       return "<ESC>";
+    case InputData::KeyCode::TAB:       return "<TAB>";
+    case InputData::KeyCode::ENTER:     return "<ENTER>";
+    case InputData::KeyCode::BACKSPACE: return "<BACKSPACE>";
+    }
+    return "";
+}
+
+/// 完整键（含普通键）→ 显示串：
+///   无修饰的普通键 → 字符本身（"a"、"中"）
+///   其余           → "<Ctrl+a>"、"<Shift+UP>"、"<F11>"
+inline std::string KeyValue(const InputData::KeybdData& key) {
+    const bool special = key.code != InputData::KeyCode::NONE;
+
+    if (!special && !key.isCtrl && !key.isAlt && !key.isShift)
+        return encode_utf8(key.cp);
+
+    std::string name = special ? std::string(KeyValue(key.code)) : encode_utf8(key.cp);
+
+    std::string mods;
+    if (key.isCtrl)  mods += "Ctrl+";
+    if (key.isAlt)   mods += "Alt+";
+    if (key.isShift) mods += "Shift+";
+    if (mods.empty()) return name;                          // 无修饰的特殊键：<F11>
+
+    if (special) { name.insert(1, mods); return name; }     // <Ctrl+F11>
+    return "<" + mods + name + ">";                         // <Ctrl+a>
 }
 
 // ===========================================================================
@@ -536,17 +623,17 @@ class input {
     static bool match(InputData::InputType type, const InputData& d);
     InputData   latest(InputData::InputType type) const;   ///< 历史里最新的匹配项
 
-    input_fsm               fsm_;
+    input_fsm               fsm_;       ///< 状态机实例
     std::deque<Entry>       buffer_;   ///< 定长环形缓冲，超出容量丢弃最旧的
     std::uint64_t           seq_ = 0;  ///< 最近一次写入的序号
     mutable std::mutex      m_;
     std::mutex              lifecycle_;   ///< 串行化 start/stop
-    std::condition_variable cv_;
+    std::condition_variable cv_;          ///< 用于waitInput消费者
     std::atomic<bool>       running_{false};
     std::atomic<bool>       mouse_enabled_{false};
     std::atomic<bool>       keybd_enabled_{true};
     std::atomic<InputMode>  state_{InputMode::OFF};
-    std::thread             reader_;
+    std::thread             reader_;      ///< 线程句柄
 };
 
 // ── input 实现 ──────────────────────────────────────────────────────────────
@@ -556,6 +643,8 @@ inline input::input() = default;
 inline input::~input() { stop(); }
 
 inline bool input::start() {
+
+  ///TODO 要检查终端是不是已经在raw模式下，如果不是，就返回false并且不真正启动输入框架
     std::lock_guard<std::mutex> lk(lifecycle_);
     if (running_) return true;
     terminal::write("\033[?1000h\033[?1002h\033[?1006h");
