@@ -153,10 +153,10 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
 }
 
 // ===========================================================================
-//  KeyValue — 键的显示字符串
+//  KeyPrintf — 键的显示字符串
 // ===========================================================================
 
-/// 把 Unicode 码点编码成 UTF-8 字符串（供 KeyValue 复用；将来可移入 vaterm::utf）。
+/// 把 Unicode 码点编码成 UTF-8 字符串（供 KeyPrintf 复用；将来可移入 vaterm::utf）。
 inline std::string encode_utf8(char32_t cp) {
     std::string s;
     if (cp < 0x80) {
@@ -178,8 +178,8 @@ inline std::string encode_utf8(char32_t cp) {
 }
 
 /// 特殊键码 → 显示串；可打印键（code == NONE）返回空串。
-/// 例：KeyValue(InputData::KeyCode::F11) == "<F11>"
-inline constexpr std::string_view KeyValue(InputData::KeyCode code) {
+/// 例：KeyPrintf(InputData::KeyCode::F11) == "<F11>"
+inline constexpr std::string_view KeyPrintf(InputData::KeyCode code) {
     switch (code) {
     case InputData::KeyCode::NONE:      return "";
     case InputData::KeyCode::UP:        return "<UP>";
@@ -215,13 +215,13 @@ inline constexpr std::string_view KeyValue(InputData::KeyCode code) {
 /// 完整键（含普通键）→ 显示串：
 ///   无修饰的普通键 → 字符本身（"a"、"中"）
 ///   其余           → "<Ctrl+a>"、"<Shift+UP>"、"<F11>"
-inline std::string KeyValue(const InputData::KeybdData& key) {
+inline std::string KeyPrintf(const InputData::KeybdData& key) {
     const bool special = key.code != InputData::KeyCode::NONE;
 
     if (!special && !key.isCtrl && !key.isAlt && !key.isShift)
         return encode_utf8(key.cp);
 
-    std::string name = special ? std::string(KeyValue(key.code)) : encode_utf8(key.cp);
+    std::string name = special ? std::string(KeyPrintf(key.code)) : encode_utf8(key.cp);
 
     std::string mods;
     if (key.isCtrl)  mods += "Ctrl+";
