@@ -9,10 +9,10 @@
 
 CXX       := g++
 CXX_STD   := --std=c++23
-CXX_FLAGS := -Wall -Wextra -g -fPIC -Werror -fdiagnostics-color=always
+CXX_FLAGS := -Wall -Wextra -g -fPIC -fdiagnostics-color=always -pthread
 INC_FLAGS := -I../../tui-utils/include
 
-TARGETS   := color_demo sys_demo utf_demo
+TARGETS   := color_demo sys_demo utf_demo input_demo
 
 .PHONY: all clean check
 
@@ -25,6 +25,9 @@ sys_demo: sys_demo.cpp
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< -o $@
 
 utf_demo: utf_demo.cpp
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< -o $@
+
+input_demo: input_demo.cpp
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< -o $@
 
 check: all

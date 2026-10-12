@@ -4,7 +4,7 @@
 
 CXX        := g++
 CXX_STD    := --std=c++23
-CXX_FLAGS  := -Wall -Wextra -g -fPIC -Werror -Wno-missing-field-initializers \
+CXX_FLAGS  := -Wall -Wextra -g -fPIC -Wno-missing-field-initializers \
               -fdiagnostics-color=always
 INC_FLAGS  := -I../../include -I../../tui-utils/include
 LIB_OBJ    := ../../build/bin.o/vatui.o

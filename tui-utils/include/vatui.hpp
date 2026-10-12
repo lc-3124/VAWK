@@ -230,35 +230,47 @@ class Framebuffer {
     // Extract the foreground SGR sequence from a combined SGR string.
     // Returns e.g. "\033[31m" or "" if none.
     static std::string extract_fg_sgr_(const std::string& s) {
-        size_t last = s.rfind("\033[38;");           // 8/24-bit
-        for (auto p : {"\033[3", "\033[9"}) {       // 4-bit 30-37 / 90-97
+        size_t best = std::string::npos;
+        // 8/24-bit：\033[38;5;N m 或 \033[38;2;R;G;B m
+        {
+            auto pos = s.rfind("\033[38;");
+            if (pos != std::string::npos) best = pos;
+        }
+        // 4-bit：\033[30-37m / \033[90-97m —— 取最右匹配
+        for (auto p : {"\033[3", "\033[9"}) {
             auto pos = s.rfind(p);
             if (pos != std::string::npos && pos + 3 < s.size()) {
                 char d = s[pos + 3];
-                if (d >= '0' && d <= '7' && pos > last) last = pos;
+                if (d >= '0' && d <= '7' && (best == std::string::npos || pos > best))
+                    best = pos;
             }
         }
-        if (last == std::string::npos) return {};
-        auto end = s.find('m', last);
-        return s.substr(last, end + 1 - last);
+        if (best == std::string::npos) return {};
+        auto end = s.find('m', best);
+        return s.substr(best, end + 1 - best);
     }
 
     // Extract the background SGR sequence from a combined SGR string.
     static std::string extract_bg_sgr_(const std::string& s) {
-        size_t last = s.rfind("\033[48;");           // 8/24-bit
-        for (auto p : {"\033[4", "\033[10"}) {      // 4-bit 40-47 / 100-107
+        size_t best = std::string::npos;
+        // 8/24-bit：\033[48;5;N m 或 \033[48;2;R;G;B m
+        {
+            auto pos = s.rfind("\033[48;");
+            if (pos != std::string::npos) best = pos;
+        }
+        // 4-bit：\033[40-47m / \033[100-107m —— 取最右匹配
+        // （\033[48; 会被下面的数字判定自然排除）
+        for (auto p : {"\033[4", "\033[10"}) {
             auto pos = s.rfind(p);
             if (pos != std::string::npos && pos + 3 < s.size()) {
                 char d = s[pos + 3];
-                if (d >= '0' && d <= '7' && pos > last) last = pos;
+                if (d >= '0' && d <= '7' && (best == std::string::npos || pos > best))
+                    best = pos;
             }
         }
-        // Exclude false match with \033[38
-        if (last != std::string::npos && last + 2 < s.size() && s[last + 2] == '3')
-            last = std::string::npos;  // 033[38 matched, not bg
-        if (last == std::string::npos) return {};
-        auto end = s.find('m', last);
-        return s.substr(last, end + 1 - last);
+        if (best == std::string::npos) return {};
+        auto end = s.find('m', best);
+        return s.substr(best, end + 1 - best);
     }
 
     // Extract all non-colour SGR sequences (effects) from a combined SGR.

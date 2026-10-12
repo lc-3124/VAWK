@@ -9,4 +9,5 @@ test/tui/color
 test/tui/paint
 test/tui/print
 test/tui/cover
+test/tui/input
 

@@ -4,9 +4,9 @@
 /**
  * lc3124(260923):
  * 我重新设计了输入模块，区别于以前通过获取鼠标输入后手动调用parse()来解析
- * 相关数据，这次我打算完全接管终端模拟器的全部输入，在用户层面不再使用系统的
- * 原生输入。使用状态机来解析输入，解析的结果填入缓冲队列，消费者从缓冲队列
- * 获取键盘和鼠标的输入事件。
+ * 相关数据，这次我打算编写一个输入引擎，完全接管终端模拟器的全部输入，在用
+ * 户层面不再使用系统的原生输入。使用状态机来解析输入，解析的结果填入缓冲队
+ * 列，消费者从缓冲队列获取键盘和鼠标的输入事件。
  *
  * TODO 目前还在编写这些代码并且进行测试，在测试和审查完成之后，我会分离定义
  * 和实现。
@@ -34,11 +34,9 @@
  *
  * 环形缓冲容量：只保留最近 VATERM_INPUT_BUFFER_SIZE 条事件，超出丢弃最旧的。
  * 可在编译期用 -DVATERM_INPUT_BUFFER_SIZE=N 覆盖。
- *
- * lc3124(260923)
  */
 #ifndef VATERM_INPUT_BUFFER_SIZE
-#define VATERM_INPUT_BUFFER_SIZE 16
+#define VATERM_INPUT_BUFFER_SIZE 64
 #endif
 
 namespace vaterm {
@@ -58,8 +56,9 @@ namespace vaterm {
  *
  * 输入数据包：状态机解析出的一个键盘或鼠标事件。
  *
- * lc3124(260923):用 inputType 做标签、联合体承载键/鼠负载以减少空间浪费；
- * 读取时先看 inputType 再取对应成员。
+ * lc3124(260923): inputData的负载中，使用联合体来节约内存，毕竟一个输入事件只会
+ * 是鼠标或者键盘中的一个，要不然就是空的。
+ * 除此之外，inputDate还有一些子结构，用于定义InputData的行为和输入本身
  */
 struct InputData {
     // ── 子结构定义 ─────────────────────────────────────────────────────────
@@ -70,7 +69,9 @@ struct InputData {
      *
      * 数据包类型，决定联合体中哪个负载成员有效。
      *
-     * lc3124(260923):NON 表示“空包”，非阻塞读取没有事件时返回它。
+     * lc3124(260923):NON 表示“空包”;
+     * 一般用户用了非阻塞的输入获取，但缓冲区没有数据
+     * 或者阻塞模式的输入获取接口超时了，我们便返回一个空包给他。
      */
     enum class InputType : uint8_t {
         MOUSE = 0,  ///< 鼠标事件
@@ -99,8 +100,8 @@ struct InputData {
      *
      * 鼠标动作。
      *
-     * lc3124(260923):由 SGR 的 Cb 推导：终止符 M/m→按下/松开，bit5→移动
-     * （无键为 MOVE、有键为 DRAG），bit6→滚轮（方向看最低位）。
+     * lc3124(260923):悬停不是SGR兼容的状态，但是毕竟有松开和按下的动作，
+     * 我把无瞬间状态又不是拖拽或按住的的SGR序列认为是鼠标在悬浮
      */
     enum class MouseAction : uint8_t {
         RELEASE = 0,  ///< 松开
@@ -116,7 +117,8 @@ struct InputData {
      *
      * 鼠标事件负载（坐标为 0 起）。
      *
-     * lc3124(260923):修饰键单独存 bool，避免用户做位运算。
+     * lc3124(260923):SGR返回的坐标是从1开始的，这和我们对终端的行列的认知有偏差
+     * 于是我们规范使用以0作为坐标起始位置，这会表现在后续的 parse_mouse 处理中
      */
     struct MouseData {
         int         col     = 0;                     ///< 列
@@ -151,7 +153,8 @@ struct InputData {
      *
      * 键盘事件负载。
      *
-     * lc3124(260923):cp 存 Unicode 码点（含 CJK）；修饰键用 bool。
+     * lc3124(260923):cp 存 Unicode 码点（含 CJK,我们把从输入法搞进来的CJK字符
+     * 判定为一次键盘输入，这是TUI的输入引擎和GUI很大的区别之体现）；
      */
     struct KeybdData {
         char32_t cp      = 0;              ///< 可打印键的 Unicode 码点（无则 0）
@@ -171,8 +174,7 @@ struct InputData {
      *
      * 事件负载；按 inputType 读取 mouse 或 keybd。
      *
-     * lc3124(260923):联合体成员带默认成员初始值，故自定义构造/析构；默认不
-     * 初始化任何成员，由 inputType 决定读哪一个，由 makeMouse/makeKeybd 写入。
+     * lc3124(260923):这个负载永远是用构造函数构建而不是其他方式侵入式组装的。
      */
     union Value {
         MouseData mouse;  ///< 鼠标
@@ -189,7 +191,9 @@ struct InputData {
      *
      * 构造一个空包（inputType = NON）。
      *
-     * lc3124(260923):空包用于表达“没有事件”。
+     * lc3124(260923):空包用于表达“没有事件”,在构建数据包的时候，使用NON来够建
+     * 一个空的包，消费者在获取数据包的窗口期中没有拿到有有效信息的数据包，那
+     * 么进行这个行为的函数就会构建一个空的数据包返回给调用者。
      */
     InputData();
 
@@ -252,10 +256,10 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
  * vaterm::encode_utf8(...)
  *
  * 参数：
- * char32_t cp ， 用于......
+ * char32_t cp ， 用于接受码点
  *
  * 返回:
- * std::string , 表示.....
+ * std::string , 准换好的字符串，wstring让人火大，我专门写了一个库用string处理宽字符
  *
  * lc3124(260923):把 Unicode 码点编码成 UTF-8 字符串（供 KeyPrintf 复用；虽然和vaterm::utf模块的职责
  * 交叉，但是这个模块是输入引擎的必要功能，我设计让它和其他模块解耦）。
@@ -292,6 +296,7 @@ inline std::string encode_utf8(char32_t cp) {
  * std::string_view , 形如 "<F11>"、"<UP>"；NONE 返回 ""
  *
  * lc3124(260923):例：KeyPrintf(InputData::KeyCode::F11) == "<F11>"。
+ * 这玩意不是给用户用的
  */
 inline constexpr std::string_view KeyPrintf(InputData::KeyCode code) {
     switch (code) {
@@ -911,6 +916,12 @@ inline void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>
  */
 
 class input {
+    // 前置私有定义：倾倒器 dumper 会引用缓冲条目
+    struct Entry {
+        std::uint64_t seq;   ///< 单调递增写入序号
+        InputData     data;  ///< 事件
+    };
+
   public:
     /**
      * vaterm::input::InputMode
@@ -923,7 +934,6 @@ class input {
      * 0 ，键盘鼠标输入都是无效的，
      * 4 , 模块没有开启输入代理，输入由系统负责
      *
-     * lc3124(260923):数值按上面的语义约定。
      */
     enum class InputMode : uint8_t {
         ON = true,
@@ -952,6 +962,8 @@ class input {
      * bool , 成功返回 true
      *
      * lc3124(260923):raw mode 需调用方预先开启；未处于 raw 模式时返回 false、不启动。
+     * 这样设计是因为我的预想设计中，input模块由再次封装，raw模式的切换已经在vatui
+     * 的构造和析构种完成。
      */
     bool start();
 
@@ -966,7 +978,6 @@ class input {
      * 返回:
      * bool , 成功返回 true
      *
-     * lc3124(260923):幂等，可并发调用；析构会自动调用。
      */
     bool stop();
 
@@ -1020,7 +1031,7 @@ class input {
     /**
      * vaterm::input::getInput(...)
      *
-     * 非阻塞读取：从缓冲区历史里取最新的一条事件，不取走、不消费。
+     * 非阻塞读取：从缓冲区历史里读最新的一条事件，不取走、不消费。
      *   getInput(type) ：符合 type 的最新事件
      *   getInput()     ：不限类型，取最新的一条
      *
@@ -1030,7 +1041,6 @@ class input {
      * 返回:
      * InputData , 最新的一条匹配事件；没有则 NON
      *
-     * lc3124(260923):无参版本等价于 getInput(NON)。
      */
     InputData getInput(InputData::InputType type);
     InputData getInput();
@@ -1049,24 +1059,69 @@ class input {
      * 返回:
      * InputData , 新的匹配事件；超时或被 stop 返回 NON
      *
-     * lc3124(260923):只看“最近更新的那一条”，它既要是新的、又要类型匹配。
      */
     InputData waitInput(InputData::InputType type, int timeout_ms = -1);
     InputData waitInput(int timeout_ms = -1);
 
-  private:
     /**
-     * vaterm::input::Entry
+     * vaterm::input::dumper
      *
-     * 缓冲条目：事件 + 单调递增写入序号。
+     * 倾倒器：每个消费者各持一个，拥有自己的游标，从旧到新按序号顺序消费共享
+     * 缓冲区里的事件（不去重、不折叠），因此多个对象可各自读全量流。
      *
-     * lc3124(260923):序号用于判断“是不是新的”，从而不需要每读者游标。
+     * lc3124(261012):这个设计是为了解决一个麻烦：原始输入的处理和输入消息的缓存是异步的，
+     * 导致上面两个接口有可能因为原始输入过快而漏掉输入（比如输入法一次性输入一大段句子）
+     * ，所以在希望获取一次准确的用户输入的时候，
+     * 使用倾倒器可以从队列的历史消息中跟进输入来保证输入的准确。
+     * 倾倒器的作用就是确保输入的东西不会遗漏，除非缓冲区耗尽。
+     *
+     * NOTICE 注意，缓冲区耗尽会导致倾倒器的游标被强制前移，导致数据丢失，可以设置宏来改变缓冲区大小。
      */
-    struct Entry {
-        std::uint64_t seq;
-        InputData     data;
+    class dumper {
+      public:
+        /// 构造：把游标对齐到 input 当前最新（只倾倒此后新产生的事件）。
+        explicit dumper(input& in);
+
+        dumper(const dumper&) = delete;
+        dumper& operator=(const dumper&) = delete;
+
+        /**
+         * vaterm::input::dumper::dump(...)
+         *
+         * 倾倒一条：返回游标之后“最旧”的事件，并把游标前进到它；已追平最新则等待。
+         *
+         * 参数：
+         * int timeout_ms ， 负数无限等待；>= 0 有限等待
+         *
+         * 返回:
+         * InputData , 下一条未倾倒的事件；超时或被 stop 返回 NON
+         */
+        InputData dump(int timeout_ms = -1);
+
+        /// 重置：游标对齐回当前最新（忽略此前积压），并把丢帧计数清零。
+        void reset();
+
+        /// 自构造 / 上次 reset 以来，被环形缓冲覆盖而丢掉的事件条数。
+        std::uint64_t lost() const;
+
+      private:
+        const Entry* next_unread();   ///< 游标之后最旧的一条（需持 in_->m_）
+
+        input*        in_;
+        std::uint64_t cursor_     = 0;   ///< 最后一条已倾倒事件的序号
+        /**
+         * lc3124(261012): 引擎世代设计是为了检测当前环形缓冲的游标是否失效，
+         * 输入框架热重载的时候会重置缓冲区，这时候倾倒器的游标是错误的，
+         * 输入框架会在每次重载的时候更新世代，倾倒器跟进这个世代就可以知道自己是不是
+         * 最新的，以便于游标回到正确位置。
+         */
+        std::uint64_t generation_ = 0;   ///< 构造/重置时的引擎世代
+        std::uint64_t lost_       = 0;   ///< 累计丢帧
     };
 
+
+    //--- 咳咳，我们还在input类中，注意 ---
+  private:
     void reader_loop();
     void enqueue(std::deque<InputData>& produced);
     void update_state();
@@ -1082,8 +1137,6 @@ class input {
      *
      * 返回:
      * match → bool ；latest → InputData
-     *
-     * lc3124(260923):只服务于 getInput 的“取最新”查询。
      */
     static bool match(InputData::InputType type, const InputData& d);
     InputData   latest(InputData::InputType type) const;   ///< 历史里最新的匹配项
@@ -1091,9 +1144,10 @@ class input {
     input_fsm               fsm_;       ///< 状态机实例
     std::deque<Entry>       buffer_;   ///< 定长环形缓冲，超出容量丢弃最旧的
     std::uint64_t           seq_ = 0;  ///< 最近一次写入的序号
+    std::uint64_t           generation_ = 0;  ///< 引擎世代
     mutable std::mutex      m_;
     std::mutex              lifecycle_;   ///< 串行化 start/stop
-    bool                    started_ = false;  ///< 是否已接管终端（供 stop 判断是否恢复）
+    bool                    started_ = false;  ///< 是否已接管终端
     std::condition_variable cv_;          ///< 用于waitInput消费者
     std::atomic<bool>       running_{false};
     std::atomic<bool>       mouse_enabled_{false};
@@ -1108,6 +1162,10 @@ inline input::input() = default;
 
 inline input::~input() { stop(); }
 
+
+/**
+ * 完成启动的一些环境变量的设置，启动工作线程
+ */
 inline bool input::start() {
     std::lock_guard<std::mutex> lk(lifecycle_);
     if (running_) return true;
@@ -1126,6 +1184,7 @@ inline bool input::start() {
         std::lock_guard<std::mutex> lock(m_);
         buffer_.clear();
         seq_ = 0;
+        ++generation_;          // 引擎已清空：所有 dumper 需重对齐游标
     }
     if (reader_.joinable()) reader_.join();   // 回收可能已结束的旧线程
     mouse_enabled_ = true;
@@ -1145,8 +1204,9 @@ inline bool input::stop() {
         std::lock_guard<std::mutex> lock(m_);
         buffer_.clear();
         seq_ = 0;
+        ++generation_;          // 引擎已清空：所有 dumper 需重对齐游标
     }
-    // 只有真正接管过终端才写关闭序列（没跑过就不打扰终端）。
+    // 写终止序列，如果没有跑过引擎就不打扰终端。
     if (started_) {
         terminal::write("\033[?1006l\033[?1002l\033[?1000l");
         terminal::flush();
@@ -1201,6 +1261,10 @@ inline void input::update_state() {
                          : InputMode::INPUT_DISABLE;
 }
 
+
+/**
+ * lc3124(261012): 这一段代码不是我写的，我需要花一些时间来理清楚这玩意。
+ */
 inline void input::reader_loop() {
     std::deque<InputData> produced;
     int idle_ready = 0;   // 连续“poll 说可读却读不到”的次数，用于识别 EOF
@@ -1209,6 +1273,10 @@ inline void input::reader_loop() {
         int r = ::poll(&pfd, 1, 50);
         if (r < 0) continue;
 
+        /**
+         * 如果终端发来escape序列，按理来说应该读到序列结束，但是如果esc序列
+         * 长时间没有终止，那就不等来，直接收敛
+         */
         if (r == 0) {                 // 超时：收敛孤立的 Esc
             idle_ready = 0;
             fsm_.flush_pending(produced);
@@ -1229,7 +1297,7 @@ inline void input::reader_loop() {
         }
         enqueue(produced);
 
-        // 输入源结束：HUP/ERR/NVAL，或反复“可读却无数据”（如普通文件 EOF）。
+        // 输入源结束：HUP/ERR/NVAL，或反复“可读却无数据”。
         if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
             running_ = false;
             state_   = InputMode::INPUT_DISABLE;
@@ -1247,6 +1315,10 @@ inline void input::reader_loop() {
     }
 }
 
+/** 
+ * lc3124(261012):这段没注释更是让人头大
+ * 看起来是输入事件缓冲有关的
+ */
 inline void input::enqueue(std::deque<InputData>& produced) {
     if (produced.empty()) return;
     bool pushed = false;
@@ -1306,6 +1378,63 @@ inline InputData input::waitInput(InputData::InputType type, int timeout_ms) {
 
 inline InputData input::waitInput(int timeout_ms) {
     return waitInput(InputData::InputType::NON, timeout_ms);
+}
+
+
+/**
+ * 倾倒器实现
+ */
+
+// 构造
+inline input::dumper::dumper(input& in) : in_(&in) {
+    std::lock_guard<std::mutex> lock(in_->m_);
+    cursor_     = in_->seq_;
+    generation_ = in_->generation_;
+}
+
+// 从旧到新，找游标之后“最旧”的一条（需持 in_->m_）。
+inline const input::Entry* input::dumper::next_unread() {
+    for (const auto& e : in_->buffer_)
+        if (e.seq > cursor_) return &e;
+    return nullptr;
+}
+
+inline InputData input::dumper::dump(int timeout_ms) {
+    std::unique_lock<std::mutex> lock(in_->m_);
+
+    // 引擎被清空/重启,世代变了,游标重对齐到最新，避免“冲到未来”卡死。
+    if (generation_ != in_->generation_) {
+        cursor_     = in_->seq_;
+        generation_ = in_->generation_;
+    }
+
+    auto ready = [&] { return !in_->running_ || next_unread() != nullptr; };
+    if (!ready()) {
+        if (timeout_ms < 0) {  ///< 无时限：一直等到 ready() 为真（有未读事件，或引擎停止）
+            in_->cv_.wait(lock, ready);
+        } else if (!in_->cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
+            return InputData{};        // 超时 → NON
+        }
+    }
+
+    const Entry* e = next_unread();
+    if (!e) return InputData{};        // 被 stop / 无新事件
+    if (e->seq > cursor_ + 1)          // 中间有被环形覆盖的 → 记丢帧
+        lost_ += e->seq - cursor_ - 1;
+    cursor_ = e->seq;                  // 游标前进到这一条
+    return e->data;
+}
+
+inline void input::dumper::reset() {
+    std::lock_guard<std::mutex> lock(in_->m_);
+    cursor_     = in_->seq_;
+    generation_ = in_->generation_;
+    lost_       = 0;
+}
+
+inline std::uint64_t input::dumper::lost() const {
+    std::lock_guard<std::mutex> lock(in_->m_);
+    return lost_;
 }
 
 } // namespace vaterm

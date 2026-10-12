@@ -11,7 +11,8 @@
 //  fullwidth awareness based on East Asian Width and Unicode character
 //  properties).
 //
-//  All functions accept std::string_view and never allocate.
+//  Most functions accept std::string_view and never allocate; `pop_back`
+//  is the exception — it edits a std::string in place.
 //
 //  References:
 //    - RFC 3629 (UTF-8)
@@ -20,6 +21,7 @@
 // -----------------------------------------------------------------------
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 namespace vaterm {
@@ -78,6 +80,16 @@ inline std::string_view at(std::string_view s, size_t i) {
         pos += cb;
     }
     return {};
+}
+
+// Remove the last codepoint from the UTF-8 string `s` in place.
+// Stray trailing continuation bytes are backed over up to the nearest
+// leading byte first. Typical use: Backspace deleting one character.
+inline void pop_back(std::string& s) {
+    size_t i = s.size();
+    while (i > 0 && (static_cast<unsigned char>(s[i - 1]) & 0xC0) == 0x80) --i;
+    if (i > 0) --i;
+    s.erase(i);
 }
 
 // Return the terminal display width of the single codepoint whose
