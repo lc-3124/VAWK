@@ -27,8 +27,8 @@ sys_demo: sys_demo.cpp
 utf_demo: utf_demo.cpp
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< -o $@
 
-input_demo: input_demo.cpp
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< -o $@
+input_demo: input_demo.cpp ../../build/bin.o/input.o
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) $< ../../build/bin.o/input.o -o $@
 
 check: all
 	@echo "Running sys_demo..."

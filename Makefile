@@ -36,9 +36,13 @@ check:
 	@echo "All headers OK."
 
 # Build the vatui library object.
-lib: build/bin.o/vatui.o build/bin.o/entity.o build/bin.o/event_upstream.o build/bin.o/event_router.o
+lib: build/bin.o/vatui.o build/bin.o/entity.o build/bin.o/event_upstream.o build/bin.o/event_router.o build/bin.o/input.o
 
 build/bin.o/vatui.o: src/utils/vatui.cpp tui-utils/include/vatui.hpp
+	@mkdir -p build/bin.o
+	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
+
+build/bin.o/input.o: src/vaterm/input.cpp tui-utils/include/vaterm/input.hpp
 	@mkdir -p build/bin.o
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
 

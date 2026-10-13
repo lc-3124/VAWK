@@ -7,7 +7,7 @@ CXX_STD    := --std=c++23
 CXX_FLAGS  := -Wall -Wextra -g -fPIC -Wno-missing-field-initializers \
               -fdiagnostics-color=always
 INC_FLAGS  := -I../../include -I../../tui-utils/include
-LIB_OBJ    := ../../build/bin.o/vatui.o
+LIB_OBJ    := ../../build/bin.o/vatui.o ../../build/bin.o/input.o
 LDFLAGS    := $(LIB_OBJ)
 
 SRCS       := $(wildcard *.cpp)

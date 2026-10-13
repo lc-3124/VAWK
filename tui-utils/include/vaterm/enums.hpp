@@ -107,6 +107,92 @@ struct Color8 {
 struct Trans {};
 inline constexpr Trans TRANS{};
 
+// ---- input module enums -------------------------------------------------
+//  (vaterm::input / vaterm::InputData 使用；定义集中在此，声明见 vaterm/input.hpp)
+
+/**
+ * vaterm::InputData::InputType
+ *
+ * 数据包类型，决定联合体中哪个负载成员有效。
+ *
+ * lc3124(260923):NON 表示“空包”;
+ * 一般用户用了非阻塞的输入获取，但缓冲区没有数据
+ * 或者阻塞模式的输入获取接口超时了，就会取得一个空包。
+ */
+enum class InputType : uint8_t {
+    MOUSE = 0,  ///< 鼠标事件
+    KEYBD = 1,  ///< 键盘事件
+    NON   = 2   ///< 空包（无事件）
+};
+
+/**
+ * vaterm::InputData::MouseButton
+ *
+ * 鼠标按键。
+ *
+ * lc3124(260923):滚轮、松开用不到具体按键，归为 NONE。
+ */
+enum class MouseButton : uint8_t {
+    NONE = 0,  ///< 无按键（滚轮、松开）
+    LEFT,      ///< 左键
+    MIDDLE,    ///< 中键
+    RIGHT      ///< 右键
+};
+
+/**
+ * vaterm::InputData::MouseAction
+ *
+ * 鼠标动作。
+ *
+ * lc3124(260923):悬停不是SGR兼容的状态，但是毕竟有松开和按下的动作，
+ * 我把无瞬间状态又不是拖拽或按住的的SGR序列认为是鼠标在悬浮
+ */
+enum class MouseAction : uint8_t {
+    RELEASE = 0,  ///< 松开
+    PRESS,        ///< 按下
+    DRAG,         ///< 按住拖动
+    MOVE,         ///< 无按键移动（悬停）
+    SCROLL_UP,    ///< 滚轮上滚
+    SCROLL_DOWN   ///< 滚轮下滚
+};
+
+/**
+ * vaterm::InputData::KeyCode
+ *
+ * 键盘特殊键码（可打印键请用 KeybdData::cp，此时 code 保持 NONE）。
+ *
+ * lc3124(260923):特殊键无法用字符表示，用枚举区分；书面值可以用KeyPrintf
+ * 来编码。
+ */
+enum class KeyCode : int {
+    NONE = 0,
+    UP, DOWN, LEFT, RIGHT,
+    HOME, END, PGUP, PGDN, INS, DEL,
+    F1, F2, F3, F4, F5, F6,
+    F7, F8, F9, F10, F11, F12,
+    ESC, TAB, ENTER, BACKSPACE
+};
+
+/**
+ * vaterm::input::InputMode
+ *
+ * 模块工作状态。
+ *
+ * ON ，鼠标键盘启动，模块工作中。
+ * 2 , 鼠标没有启动，如果执行`enableMouse`返回这个值，说明终端不兼容鼠标。
+ * 3 , 鼠标启动了，但是键盘拿不到，显示这个一定是终端兼容出了问题
+ * 0 ，键盘鼠标输入都是无效的，
+ * 4 , 模块没有开启输入代理，输入由系统负责
+ *
+ */
+enum class InputMode : uint8_t {
+    ON = true,
+    MOUSE_DISABLE = 2,
+    KEYBD_DISABLE = 3,
+    INPUT_DISABLE = false,
+    OFF           = 4
+};
+
 } // namespace vaterm
 
 #endif // VATERM_ENUMS_HPP

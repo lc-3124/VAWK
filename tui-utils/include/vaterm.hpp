@@ -13,6 +13,11 @@
 //                       colors and text effects (4-bit, 8-bit, 24-bit).
 //    vaterm::cursor   — ANSI escape sequences for cursor movement,
 //                       shape switching, save/restore, show/hide.
+//    vaterm::input    — input engine that takes over the terminal keyboard
+//                       / mouse via a state machine, emitting structured
+//                       InputData events. NOTE: split into input.hpp +
+//                       src/vaterm/input.cpp — the only non-header-only
+//                       module; programs using it must link build/bin.o/input.o.
 //    vaterm::mouse    — SGR-encoded mouse event tracking: enable/disable
 //                       the terminal protocol, parse raw sequences into
 //                       a structured MouseState (button, action, position).
