@@ -262,32 +262,33 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
  *
  * lc3124(260923):把 Unicode 码点编码成 UTF-8 字符串（供 KeyPrintf 复用；虽然和vaterm::utf模块的职责
  * 交叉，但是这个模块是输入引擎的必要功能，我不打算让这个模块依赖于vaterm::utf模块）。
+ * UTF看的眼睛疼，这段完全是AI实现的，我盯了几行看起来没问题。
  */
 inline std::string encode_utf8(char32_t cp) {
     std::string s;
 
-    // UTF-8 是变长编码，按码点范围决定用几个字节；
-    // 首字节带上「有几个字节」的前缀，后续字节一律是 10xxxxxx 形式的续字节：
-    //
-    //   0x00    .. 0x7F     → 1 字节  0xxxxxxx
-    //   0x80    .. 0x7FF    → 2 字节  110xxxxx 10xxxxxx
-    //   0x800   .. 0xFFFF   → 3 字节  1110xxxx 10xxxxxx 10xxxxxx
-    //   0x10000 .. 0x10FFFF → 4 字节  11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+    // 这里放一张表，参考一下utf的编码方式，我们比较首字节大小来判断编码模式，然后把
+    // 编码位取出来，合成一个字符
+    //   0x00    .. 0x7F     → 1 0xxxxxxx
+    //   0x80    .. 0x7FF    → 2 110xxxxx 10xxxxxx
+    //   0x800   .. 0xFFFF   → 3 1110xxxx 10xxxxxx 10xxxxxx
+    //   0x10000 .. 0x10FFFF → 4 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
 
     if (cp < 0x80) {
         // ASCII：单字节，码点本身就是字节值
         s += static_cast<char>(cp);
     } else if (cp < 0x800) {
-        // 2 字节：高 5 位写入首字节，低 6 位写入续字节
-        s += static_cast<char>(0xC0 | (cp >> 6));
+        // 2 字节：高 5 位写入首字节，低 6 位写入续字节，移位收集编码位
+        // 第一行代码：丢弃7位，拿11000000(0xC0)做OR运算，就能把编码位滤出来，剩下的同理
+        s += static_cast<char>(0xC0 | (cp >> 6)); 
         s += static_cast<char>(0x80 | (cp & 0x3F));
     } else if (cp < 0x10000) {
-        // 3 字节：覆盖基本多文种平面，日常 CJK 汉字都走这里
+        // 3 字节：CJK
         s += static_cast<char>(0xE0 | (cp >> 12));
         s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
         s += static_cast<char>(0x80 | (cp & 0x3F));
     } else {
-        // 4 字节：增补平面，如 emoji、罕见汉字
+        // 4 字节：emoji、罕见字
         s += static_cast<char>(0xF0 | (cp >> 18));
         s += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
         s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
@@ -308,7 +309,8 @@ inline std::string encode_utf8(char32_t cp) {
  * std::string_view , 形如 "<F11>"、"<UP>"；NONE 返回 ""
  *
  * lc3124(260923):例：KeyPrintf(InputData::KeyCode::F11) == "<F11>"。
- * 这玩意不是给用户用的
+ * 这玩意不是给用户用的，这段程序用于将code字段转化成string，接下来要给下一个
+ * 重载函数继续处理
  */
 inline constexpr std::string_view KeyPrintf(InputData::KeyCode code) {
     switch (code) {
@@ -352,10 +354,8 @@ inline constexpr std::string_view KeyPrintf(InputData::KeyCode code) {
  * const InputData::KeybdData& key ， 键盘负载
  *
  * 返回:
- * std::string , 无修饰的普通键返回字符本身（"a"、"中"）；
- *               其余返回 "<Ctrl+a>"、"<Shift+UP>"、"<F11>"
- *
- * lc3124(260923):把“键码 → 书面值”的解析收进本模块，避免污染用户业务。
+ * std::string , 无修饰的普通键返回字符本身；
+ *               其余返回 KeyPrintf(code)解析出来的字面 
  */
 inline std::string KeyPrintf(const InputData::KeybdData& key) {
     const bool special = key.code != InputData::KeyCode::NONE;
@@ -378,6 +378,8 @@ inline std::string KeyPrintf(const InputData::KeybdData& key) {
 // ===========================================================================
 //  MousePrintf / InputPrintf — 鼠标与通用事件的显示字符串
 // ===========================================================================
+//
+// lc3124(261013): 搞了一堆重载，因为鼠标的事件往往比较复杂，设计组合。用户可以有需自取。
 
 /**
  * vaterm::MousePrintf(InputData::MouseButton b)
@@ -389,8 +391,6 @@ inline std::string KeyPrintf(const InputData::KeybdData& key) {
  *
  * 返回:
  * std::string_view , "NONE"/"LEFT"/"MIDDLE"/"RIGHT"
- *
- * lc3124(260923):供 MousePrintf(MouseData) 与用户直接取用。
  */
 inline constexpr std::string_view MousePrintf(InputData::MouseButton b) {
     switch (b) {
@@ -412,8 +412,6 @@ inline constexpr std::string_view MousePrintf(InputData::MouseButton b) {
  *
  * 返回:
  * std::string_view , "PRESS"/"RELEASE"/"DRAG"/"MOVE"/"SCROLL_UP"/"SCROLL_DOWN"
- *
- * lc3124(260923):供 MousePrintf(MouseData) 与用户直接取用。
  */
 inline constexpr std::string_view MousePrintf(InputData::MouseAction a) {
     switch (a) {
@@ -437,8 +435,6 @@ inline constexpr std::string_view MousePrintf(InputData::MouseAction a) {
  *
  * 返回:
  * std::string , 形如 "<MOUSE (5,7) LEFT PRESS Ctrl>"
- *
- * lc3124(260923):无按键（滚轮/悬停）时省略按键段。
  */
 inline std::string MousePrintf(const InputData::MouseData& m) {
     std::string s = "<MOUSE (";
@@ -482,22 +478,27 @@ inline std::string InputPrintf(const InputData& e) {
 }
 
 /**
- * vaterm::input_fsm — 输入状态机（内部实现）
+ * vaterm::input_fsm — 输入状态机
  *
  * 把终端字节流解析成 InputData 事件。之所以单独成一个类，是为了能脱离
  * 终端、直接喂字节来测试；正常使用请通过 vaterm::input。
  *
- * 状态转移：
- *   GROUND ─ 0x1B ─► ESC
- *   ESC    ─ '['  ─► CSI ── 第 3 字节为 '<' ─► MOUSE
- *                 └─ 终止符 0x40-0x7E ─► GROUND（键盘序列）
- *   ESC    ─ 'O'  ─► SS3 ─ 1 字节 ─► GROUND
- *   ESC    ─ 可打印 ─► GROUND（Alt+键）
- *   ESC    ─ 其它  ─► GROUND（产出 Esc，并把该字节重新按 GROUND 处理）
- *   GROUND ─ 0xC2-0xF7 ─► UTF8 ─ 后续字节 ─► GROUND
- *   MOUSE  ─ 累积到 'M'/'m' ─► GROUND（超长则丢弃）
+ * 状态转移表：
+ *   GROUND - 0x1B -> ESC
+ *   ESC    - '['  -> CSI - 第 3 字节为 '<' -> MOUSE
+ *                 ->终止符 0x40-0x7E -> GROUND（键盘序列）
+ *   ESC    - 'O'  -> SS3 - 1 字节 -> GROUND
+ *   ESC    - 可打印 -> GROUND（Alt+键）
+ *   ESC    - 其它  -> GROUND（产出 Esc，并把该字节重新按 GROUND 处理）
+ *   GROUND - 0xC2-0xF7 -> UTF8 - 后续字节 -> GROUND
+ *   MOUSE  - 累积到 'M'/'m' -> GROUND（超长则收敛丢弃）
  *
  * lc3124(260923):独立成类是为了可测试；对外只暴露 vaterm::input。
+ * 这玩意是输入引擎最复杂的算法部分，用来将原始输入解析为输入事件，
+ * 利用状态机实现。
+ *
+ * TODO lc3124(261013): 咱们得要把这个模块复盘一下，状态转移是我设计的，但代码是dsv4f实现的，
+ * 不能保证没有遗漏什么东西。
  */
 
 class input_fsm {
@@ -530,7 +531,7 @@ class input_fsm {
      * 返回:
      * 无
      *
-     * lc3124(260923):逐字节转发给单字节版本。
+     * lc3124(260923): 把许多字节分成一个一个字节发送给feed的单字节版本。
      */
     void feed(std::string_view bytes, std::deque<InputData>& out);
 
@@ -545,7 +546,7 @@ class input_fsm {
      * 返回:
      * bool , true 表示停在半截序列（CSI / 鼠标 / UTF-8 / 孤立 ESC）
      *
-     * lc3124(260923):供调用方判断是否需要继续等后续字节。
+     * lc3124(260923): 供调用方判断是否需要继续等后续字节。
      */
     bool pending() const;
 
@@ -560,7 +561,8 @@ class input_fsm {
      * 返回:
      * 无
      *
-     * lc3124(260923):其它半截序列保留，继续等待后续字节。
+     * lc3124(260923): 超时说明这玩意可能不是escape事件，而是一个单纯的输入，
+     * 也有可能终端出现错误，导致没有完整传递输入动作；总之就是不要了。
      */
     void flush_pending(std::deque<InputData>& out);
 
@@ -598,8 +600,6 @@ class input_fsm {
      *
      * 返回:
      * 无
-     *
-     * lc3124(260923):统一走 InputData::makeKeybd。
      */
     static void push_key(std::deque<InputData>& out, char32_t cp,
                          InputData::KeyCode code,
@@ -616,8 +616,6 @@ class input_fsm {
      *
      * 返回:
      * bool , true 表示同一字节需在新状态下重新处理
-     *
-     * lc3124(260923):GROUND/ESC/CSI/SS3/MOUSE/UTF8 各一个。
      */
     bool step_ground(unsigned char b, std::deque<InputData>& out);
     bool step_esc(unsigned char b, std::deque<InputData>& out);
@@ -626,6 +624,10 @@ class input_fsm {
     bool step_mouse(unsigned char b, std::deque<InputData>& out);
     bool step_utf8(unsigned char b, std::deque<InputData>& out);
 
+
+    /**
+     * lc3124(261013): 拿到完整的csi序列还不够，传入这里解析成事件。
+     */
     /**
      * vaterm::input_fsm::parse_csi(...)
      *
@@ -638,8 +640,6 @@ class input_fsm {
      *
      * 返回:
      * 无
-     *
-     * lc3124(260923):参数形如 "n" 或 "n;m"，m 是修饰键编码。
      */
     static void parse_csi(std::string_view params, char final, std::deque<InputData>& out);
 
@@ -654,8 +654,6 @@ class input_fsm {
      *
      * 返回:
      * 无
-     *
-     * lc3124(260923):坐标系 1 起转 0 起；滚轮方向取 Cb 最低位。
      */
     static void parse_mouse(const std::string& seq, std::deque<InputData>& out);
 };
@@ -663,9 +661,10 @@ class input_fsm {
 // ── input_fsm 实现 ──────────────────────────────────────────────────────────
 
 inline void input_fsm::feed(unsigned char b, std::deque<InputData>& out) {
-    bool reprocess = true;
+    bool reprocess = true; ///< 这个字节还要不要处理？要！
     while (reprocess) {
         switch (state_) {
+          // 根据当前状态步进
         case State::GROUND: reprocess = step_ground(b, out); break;
         case State::ESC:    reprocess = step_esc(b, out);    break;
         case State::CSI:    reprocess = step_csi(b, out);    break;
@@ -676,14 +675,17 @@ inline void input_fsm::feed(unsigned char b, std::deque<InputData>& out) {
     }
 }
 
+
 inline void input_fsm::feed(std::string_view bytes, std::deque<InputData>& out) {
-    for (unsigned char b : bytes) feed(b, out);
+    for (unsigned char b : bytes) feed(b, out); ///< 投喂全部字节
 }
 
+// 如果当前状态不是GROUND，说明还在处理其他东西
 inline bool input_fsm::pending() const {
     return state_ != State::GROUND;
 }
 
+// 结束当前的解析任务
 inline void input_fsm::flush_pending(std::deque<InputData>& out) {
     if (state_ == State::ESC) {
         push_key(out, 0, InputData::KeyCode::ESC);
@@ -702,32 +704,73 @@ inline void input_fsm::push_key(std::deque<InputData>& out, char32_t cp,
     out.push_back(InputData::makeKeybd({cp, code, shift, alt, ctrl}));
 }
 
+/**
+ * vaterm::input_fsm::step_ground(...)
+ *
+ * GROUND（地面态）：不在任何序列之中、逐字节识别普通输入的“默认状态”。
+ * 绝大多数按键都在这里一次处理完；只有 ESC、UTF-8 首字节会把状态机推向别的状态。
+ *
+ * 参数：
+ * unsigned char b ， 当前字节
+ * std::deque<InputData>& out ， 事件输出队列
+ *
+ * 返回:
+ * bool , 恒为 false —— GROUND 是收敛态，不会出现“同一字节需在新状态再处理”的
+ *        情况（返回值约定见 step_* 系列总说明：true = 请在新状态下重处理该字节）。
+ *
+ * lc3124(260923):字节分类按优先级依次判断：转义(0x1B) → 具名控制键 → Ctrl 组合键
+ * → 可打印 ASCII → UTF-8 首字节 → 其余丢弃。
+ */
 inline bool input_fsm::step_ground(unsigned char b, std::deque<InputData>& out) {
     using KC = InputData::KeyCode;
+
+    // 0x1B = ESC：它既可能是“单独按下的 Esc 键”，也可能是某个转义序列（CSI/SS3）的开头，
+    // 此刻仅凭一个字节无法区分。于是转入 ESC 态，把已见字节（就它自己）存进 acc_，
+    // 交给后续字节、或超时时的 flush_pending() 来最终定夺。
     if (b == 0x1B) { state_ = State::ESC; acc_.assign(1, '\033'); return false; }
-    if (b == 0x09) { push_key(out, 0, KC::TAB);       return false; }
-    if (b == 0x0D) { push_key(out, 0, KC::ENTER);     return false; }
-    if (b == 0x7F) { push_key(out, 0, KC::BACKSPACE); return false; }
+
+    // ── 三个有专属键名的控制字符 ────────────────────────────────────────
+    if (b == 0x09) { push_key(out, 0, KC::TAB);       return false; }  // Tab
+    if (b == 0x0D) { push_key(out, 0, KC::ENTER);     return false; }  // 回车(CR)
+    if (b == 0x7F) { push_key(out, 0, KC::BACKSPACE); return false; }  // 退格(DEL)
+
+    // 0x00 = Ctrl+Space（也常记作 Ctrl+@）：载荷用空格码点，修饰位标 Ctrl。
     if (b == 0x00) { push_key(out, U' ', KC::NONE, false, false, true); return false; }
+
+    // 0x01-0x1A = Ctrl+a .. Ctrl+z：
+    // 终端里 Ctrl+字母 产生的就是该字母 ASCII 码减 0x40，反过来 b-1 即字母序号
+    // （0x01→'a'，0x1A→'z'）。
     if (b >= 0x01 && b <= 0x1A) {
         push_key(out, static_cast<char32_t>('a' + b - 1), KC::NONE, false, false, true);
         return false;
     }
+
+    // 0x1C-0x1F = Ctrl+\ Ctrl+] Ctrl+^ Ctrl+_：
+    // 这几个不落在字母区间内，需要单独映射（同样由 ASCII 码减 0x40 得出）。
     if (b >= 0x1C && b <= 0x1F) {
         char32_t cp = b == 0x1C ? U'\\' : b == 0x1D ? U']' : b == 0x1E ? U'^' : U'_';
         push_key(out, cp, KC::NONE, false, false, true);
         return false;
     }
+
+    // 0x20-0x7E = 可打印 ASCII：字节值本身就是字符码点，直接产出一个无修饰键事件。
     if (b >= 0x20 && b <= 0x7E) {
         push_key(out, static_cast<char32_t>(b), KC::NONE);
         return false;
     }
+
+    // 0xC2-0xF7 = UTF-8 首字节区间，按首字节大小决定后续要几个字节：
+    //   0xC2-0xDF 两字节、0xE0-0xEF 三字节（含 CJK）、0xF0-0xF7 四字节（emoji 等）。
+    // 不含 0xC0/0xC1（属“过长编码”，非法），也不含 0xF8 及以上（非 UTF-8）。
+    // 此处只把首字节存入 acc_ 并转入 UTF8 态，等续字节到齐后再解码出码点。
     if (b >= 0xC2 && b <= 0xF7) {
         state_ = State::UTF8;
         acc_.assign(1, static_cast<char>(b));
         return false;
     }
-    return false;  // 无法识别的字节，丢弃
+
+    // 其余字节（如 0x80-0xBF 的孤立续字节、0xF8-0xFF 等）无法识别，直接丢弃。
+    return false;
 }
 
 inline bool input_fsm::step_esc(unsigned char b, std::deque<InputData>& out) {
