@@ -1,12 +1,12 @@
 # =========================================================================
-#  VAWK — Visual Ansi Widget Kit  (root Makefile)
+#  VAWK — Visual Ansi Widget Kit  （根 Makefile）
 #
-#  Targets:
-#    all             — print status
-#    check           — syntax-check every .hpp with -fsyntax-only -Werror
-#    lib             — compile src/utils/vatui.cpp → build/bin.o/vatui.o
-#    test            — build all test/demo programs (delegates to test/)
-#    clean           — remove build artifacts
+#  目标：
+#    all             — 打印状态
+#    check           — 用 -fsyntax-only -Werror 对所有 .hpp 做语法检查
+#    lib             — 编译 src/utils/vatui.cpp → build/bin.o/vatui.o
+#    test            — 构建所有测试/演示程序（委派给 test/）
+#    clean           — 删除构建产物
 # =========================================================================
 
 SHELL        := bash
@@ -22,7 +22,7 @@ all:
 	@echo "Use 'make check' to verify header compilation."
 	@echo "Use 'make test' to build all test programs."
 
-# Compile-check every header to catch syntax errors.
+# 编译检查每个头文件以捕获语法错误。
 check:
 	@echo "Checking headers..."
 	@for hdr in include/vawk.hpp include/vawk/*.hpp \
@@ -35,7 +35,7 @@ check:
 	done
 	@echo "All headers OK."
 
-# Build the vatui library object.
+# 构建 vatui 库对象。
 lib: build/bin.o/vatui.o build/bin.o/entity.o build/bin.o/event_upstream.o build/bin.o/event_router.o build/bin.o/input.o
 
 build/bin.o/vatui.o: src/utils/vatui.cpp tui-utils/include/vatui.hpp
@@ -58,7 +58,7 @@ build/bin.o/event_router.o: src/vawk/event_router.cpp include/vawk/event_router.
 	@mkdir -p build/bin.o
 	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
 
-# Build all test/demo programs.
+# 构建所有测试/演示程序。
 test: lib
 	$(MAKE) -C test all
 

@@ -2,15 +2,14 @@
 #define VAWK_DRAWABLE_HPP
 
 // -----------------------------------------------------------------------
-//  vawk::Drawable — drawing / rendering interface (not yet implemented)
+//  vawk::Drawable — 绘制 / 渲染接口（尚未实现）
 //
-//  This header will define the Drawable interface that all visible
-//  components implement, along with canvas and off-screen buffer
-//  utilities.
+//  本头文件将定义所有可见组件都要实现的 Drawable 接口，
+//  以及画布和离屏缓冲区的工具。
 //
-//  Status: on hold.
+//  状态：暂停。
 // -----------------------------------------------------------------------
 
-// Placeholder — Drawable framework is currently on hold.
+// 占位——Drawable 框架目前暂停。
 
 #endif  // VAWK_DRAWABLE_HPP

@@ -2,39 +2,39 @@ CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -fPIC
 LDFLAGS := -L../tui-utils/build -lvaterm
 
-# Include paths
+# 包含路径
 INCLUDES := -I../tui-utils/include
 
-# Source and object files
+# 源文件与目标文件
 SOURCES := $(wildcard src/*.cpp)
 OBJECTS := $(SOURCES:src/%.cpp=build/%.o)
 HEADERS := $(wildcard include/*.hpp)
 
-# Targets
+# 目标
 TARGETS := bin/input_reader_demo bin/combined_demo
 
-# Default target
+# 默认目标
 all: dirs $(TARGETS)
 
-# Create necessary directories
+# 创建必要的目录
 dirs:
 	@mkdir -p build bin
 
-# Compile object files
+# 编译目标文件
 build/%.o: src/%.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-# Link input_reader_demo
+# 链接 input_reader_demo
 bin/input_reader_demo: build/input_reader.o build/input_reader_demo.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-# Link combined_demo
+# 链接 combined_demo
 bin/combined_demo: build/input_reader.o build/combined_demo.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-# Clean
+# 清理
 clean:
 	rm -rf build bin
 
-# Phony targets
+# 伪目标
 .PHONY: all dirs clean

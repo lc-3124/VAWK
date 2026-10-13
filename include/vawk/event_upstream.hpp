@@ -2,21 +2,20 @@
 #define VAWK_EVENT_UPSTREAM_HPP
 
 // -----------------------------------------------------------------------
-//  vawk::EventUpstream — event source base class
+//  vawk::EventUpstream — 事件源基类
 //
-//  An EventUpstream is any component that produces events and delivers
-//  them to registered Entity instances.  It maintains two indexes:
+//  EventUpstream 泛指任何产生事件、并把事件投递给已注册 Entity
+//  实例的组件。它维护两张索引：
 //
-//    listeners_[event_id]  → list of Entity* that want that event type
-//    entity_events_[entity] → list of event type IDs the entity is
-//                             registered for (for bulk unregister)
+//    listeners_[event_id]  → 需要该事件类型的 Entity* 列表
+//    entity_events_[entity] → 该实体已注册的事件类型 ID 列表
+//                             （用于批量注销）
 //
-//  Entities are stored as raw pointers.  The caller must ensure every
-//  Entity is unregistered before it is destroyed.
+//  实体以裸指针存储。调用方必须保证每个 Entity 在被销毁前已经注销。
 //
-//  Subclasses must implement dispatch_once() and dispatch_loop().
-//  The base class provides start_event_loop() / stop_event_loop() to
-//  run dispatch_loop() in a background thread.
+//  子类必须实现 dispatch_once() 与 dispatch_loop()。基类提供
+//  start_event_loop() / stop_event_loop()，用于在后台线程中运行
+//  dispatch_loop()。
 // -----------------------------------------------------------------------
 
 #include "entity.hpp"
@@ -36,38 +35,38 @@ class EventUpstream {
     EventUpstream() = default;
     virtual ~EventUpstream();
 
-    // ── Registration ────────────────────────────────────────────────────
+    // ── 注册 ────────────────────────────────────────────────────────────
 
-    // Register an entity to receive events of the given type ID.
+    // 注册一个实体，使其接收给定类型 ID 的事件。
     void register_listener(size_t event_id, Entity* entity);
 
-    // Unregister an entity from all event types it is subscribed to.
+    // 从该实体已订阅的所有事件类型中注销它。
     void unregister_listener(Entity* entity);
 
-    // Unregister all entities from a specific event type.
+    // 从某个事件类型上注销所有实体。
     void unregister_listener(size_t event_id);
 
-    // Unregister a specific entity from a specific event type.
+    // 从某个事件类型上注销指定实体。
     void unregister_listener(Entity* entity, size_t event_id);
 
-    // ── Dispatch (pure virtual) ─────────────────────────────────────────
+    // ── 派发（纯虚） ────────────────────────────────────────────────────
 
-    // Dispatch exactly one event from the source to its listeners.
+    // 从事件源向其监听者派发恰好一个事件。
     virtual void dispatch_once() = 0;
 
-    // Background event loop.  Runs continuously, calling dispatch_once()
-    // in a tight loop.  Used by start_event_loop() in a dedicated thread.
+    // 后台事件循环。持续运行，在紧凑循环中反复调用 dispatch_once()。
+    // 由 start_event_loop() 在专用线程中使用。
     virtual void dispatch_loop() = 0;
 
-    // ── Lifecycle ───────────────────────────────────────────────────────
+    // ── 生命周期 ────────────────────────────────────────────────────────
 
-    // Start the event loop in a background thread.
+    // 在后台线程中启动事件循环。
     void start_event_loop();
 
-    // Signal the event loop to stop and join the thread.
+    // 通知事件循环停止，并 join 该线程。
     void stop_event_loop();
 
-    // Check whether the event loop thread is currently running.
+    // 检查事件循环线程当前是否正在运行。
     bool is_running() const { return running_; }
 
   protected:
@@ -77,9 +76,9 @@ class EventUpstream {
     std::atomic<bool> running_{false};
     std::thread event_thread_;
 
-    // listeners_[event_id] = list of entities
+    // listeners_[event_id] = 实体列表
     std::vector<std::vector<Entity*>> listeners_;
-    // entity_events_[entity] = list of event type IDs
+    // entity_events_[entity] = 事件类型 ID 列表
     std::unordered_map<Entity*, std::vector<size_t>> entity_events_;
 };
 

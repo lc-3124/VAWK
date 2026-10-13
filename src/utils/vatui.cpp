@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------
-//  vatui.cpp — VaTui implementation
+//  vatui.cpp — VaTui 实现
 // -----------------------------------------------------------------------
 
 #include "vatui.hpp"
@@ -11,7 +11,7 @@
 
 #include <string>
 
-// ── Anonymous-namespace helpers ────────────────────────────────────────
+// ── 匿名命名空间辅助 ───────────────────────────────────────────────────
 
 namespace {
 
@@ -49,7 +49,7 @@ int cp_width(char32_t cp) {
     return 1;
 }
 
-} // anonymous namespace
+} // 匿名命名空间
 
 // =====================================================================
 //  Framebuffer
@@ -69,7 +69,7 @@ void Framebuffer::setPosition(PositionArgs args) {
     off_row_ = args.row;
 }
 
-// ── Text output ────────────────────────────────────────────────────────
+// ── 文本输出 ───────────────────────────────────────────────────────────
 
 void Framebuffer::printText(TextArgs args) {
     auto  col   = args.col;
@@ -85,7 +85,7 @@ void Framebuffer::printText(TextArgs args) {
 
     size_t pos = 0;
     while (pos < text.size() && col < max_col_) {
-        // Protect multi-byte: check target cell's current state.
+        // 保护多字节字符：检查目标单元格的当前状态。
         {
             auto idx_p = static_cast<size_t>(row) * max_col_ + col;
             auto& cell_p = buf_[idx_p];
@@ -101,7 +101,7 @@ void Framebuffer::printText(TextArgs args) {
             }
         }
 
-        // Decode the next codepoint.
+        // 解码下一个码点。
         auto cb = vaterm::utf::char_bytes(text.substr(pos));
         if (cb == 0) { ++pos; continue; }
         if (pos + cb > text.size()) break;
@@ -129,7 +129,7 @@ void Framebuffer::printText(TextArgs args) {
         int w = cp_width(cp);
         if (w < 1) w = 1;
 
-        // Wide char doesn't fit at right edge → write a space with style.
+        // 宽字符在右边缘放不下 → 用带样式的空格占位。
         if (w > 1 && col + 1 >= max_col_) {
             auto& cell = buf_[static_cast<size_t>(row) * max_col_ + col];
             cell.data_   = ' ';
@@ -141,7 +141,7 @@ void Framebuffer::printText(TextArgs args) {
             continue;
         }
 
-        // Write head cell.
+        // 写入头单元格。
         auto idx = static_cast<size_t>(row) * max_col_ + col;
         auto& cell = buf_[idx];
         cell.data_   = text[start];
@@ -150,7 +150,7 @@ void Framebuffer::printText(TextArgs args) {
         cell.isLong_ = (w > 1);
         cell.sgr_id_ = sid;
 
-        // Wide char: occupy a second cell.
+        // 宽字符：再占用一个单元格。
         if (w > 1 && col + 1 < max_col_) {
             size_t idx_n = idx + 1;
             auto& tail = buf_[idx_n];
@@ -177,13 +177,13 @@ void Framebuffer::printText(TextArgs args) {
     }
 }
 
-// ── Clear ──────────────────────────────────────────────────────────────
+// ── 清屏 ───────────────────────────────────────────────────────────────
 
 void Framebuffer::clear() {
     dirty_ = true;
     sgr_pool_.clear();
     uint32_t sid = intern_sgr_(vaterm::color::fg(vaterm::Color4::WHITE),
-                               true, false);   // has_fg, no bg
+                               true, false);   // 有前景色，无背景色
     for (auto& cell : buf_) {
         reset_cell_(cell);
         cell.sgr_id_ = sid;
@@ -196,7 +196,7 @@ void Framebuffer::clearRegion(RegionArgs args) {
                 .ch = ' ', .style = {}});
 }
 
-// ── Shapes ─────────────────────────────────────────────────────────────
+// ── 图形 ───────────────────────────────────────────────────────────────
 
 void Framebuffer::fillRegion(FillArgs args) {
     auto  col   = args.col;
@@ -236,7 +236,7 @@ void Framebuffer::fillRegion(FillArgs args) {
     }
 }
 
-// ── Frame import ────────────────────────────────────────────────────────
+// ── 帧导入 ──────────────────────────────────────────────────────────────
 
 void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
     if (&src == this) return;
@@ -255,12 +255,12 @@ void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
             bool src_fg = (src_cell.sgr_id_ >> 31) != 0;
             bool src_bg = (src_cell.sgr_id_ >> 30) & 1;
 
-            // Fully transparent: preserve destination cell entirely.
+            // 完全透明：完整保留目标单元格。
             if (!src_fg && !src_bg) continue;
 
             auto& dst_cell = cell_at_(dc, dr);
 
-            // ── Fragment cleanup at head position ──
+            // ── 头部位置处的碎片清理 ──
             if (!dst_cell.isHead_ && dst_cell.isLong_ && dc > 0) {
                 auto old = cell_at_(dc - 1, dr).sgr_id_;
                 reset_cell_(cell_at_(dc - 1, dr));
@@ -275,7 +275,7 @@ void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
             const auto& src_sgr = src.sgr_pool_[src_cell.sgr_id_ & 0x3FFFFFFF];
             const auto& dst_sgr = sgr_pool_[dst_cell.sgr_id_ & 0x3FFFFFFF];
 
-            // Build merged SGR: take fg/bg from src or dst depending on TRANS.
+            // 构建合并后的 SGR：按 TRANS 决定 fg/bg 取自 src 还是 dst。
             std::string merged;
             if (src_fg) merged += extract_fg_sgr_(src_sgr);
             else        merged += extract_fg_sgr_(dst_sgr);
@@ -283,7 +283,7 @@ void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
             else        merged += extract_bg_sgr_(dst_sgr);
             merged += extract_effects_sgr_(src_sgr);
 
-            // Right-edge overflow: space with merged style.
+            // 右边缘溢出：用合并后的样式写一个空格。
             int w = src_cell.isLong_ ? 2 : 1;
             if (dc + w > max_col_) {
                 uint32_t sid = intern_sgr_(merged, src_fg, src_bg);
@@ -321,7 +321,7 @@ void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
     }
 }
 
-// ── Output ─────────────────────────────────────────────────────────────
+// ── 输出 ───────────────────────────────────────────────────────────────
 
 void Framebuffer::swap() {
     if (!dirty_) return;
@@ -378,8 +378,8 @@ VaTui::VaTui() {
 }
 
 VaTui::~VaTui() {
-    // vaterm::terminal's destructor handles cursor show,
-    // screen clear, and termios restore automatically.
+    // vaterm::terminal 的析构函数会自动处理光标显示、
+    // 清屏以及 termios 还原。
 }
 
 VaTui& VaTui::instance() {

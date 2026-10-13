@@ -1,16 +1,16 @@
 // -----------------------------------------------------------------------
-//  color_demo — demonstrates every colour API function in vaterm::color
+//  color_demo — 演示 vaterm::color 中的每一个颜色 API 函数
 //
-//  This demo exercises:
-//    - 4-bit foreground (Color4 palette, 16 colours)
-//    - 8-bit foreground (256-colour cube)
-//    - 24-bit true-color foreground
-//    - Background colours (4-bit, 8-bit, 24-bit)
-//    - Single and combined text effects
-//    - Colour-space conversion (rgb_to_256, _256_to_rgb, etc.)
-//    - Greyscale ramp and round-trip conversion
+//  本演示覆盖：
+//    - 4 位前景色（Color4 调色板，16 色）
+//    - 8 位前景色（256 色立方体）
+//    - 24 位真彩色前景色
+//    - 背景色（4 位、8 位、24 位）
+//    - 单一与组合文本效果
+//    - 色彩空间转换（rgb_to_256、_256_to_rgb 等）
+//    - 灰阶渐变与往返转换
 //
-//  Run:  ./color_demo | less -R
+//  运行：  ./color_demo | less -R
 // -----------------------------------------------------------------------
 
 #include <vaterm.hpp>
@@ -20,7 +20,7 @@
 
 using namespace vaterm;
 
-// Print a section header with bold+underline.
+// 打印一个粗体+下划线的分节标题。
 static void section(const std::string& title) {
     printf("\n%s═══ %s ═══%s\n",
            color::effect({TextEffect::BOLD, TextEffect::UNDERLINE}).c_str(),
@@ -28,7 +28,7 @@ static void section(const std::string& title) {
            color::reset().c_str());
 }
 
-// Show all 16 4-bit foreground colours.
+// 显示全部 16 种 4 位前景色。
 static void demo_fg_4bit() {
     section("4-bit Foreground");
     for (int i = 0; i < 16; ++i) {
@@ -37,7 +37,7 @@ static void demo_fg_4bit() {
     }
 }
 
-// Show the full 256-colour foreground cube.
+// 显示完整的 256 色前景立方体。
 static void demo_fg_8bit() {
     section("8-bit (256-color) Foreground");
     for (int i = 0; i < 256; ++i) {
@@ -46,8 +46,8 @@ static void demo_fg_8bit() {
     }
 }
 
-// Show a true-color gradient: vary R and G at 32-step intervals,
-// keeping B fixed at 128.
+// 显示真彩色渐变：R 与 G 以 32 为步长变化，
+// B 固定为 128。
 static void demo_fg_24bit() {
     section("24-bit True Color Foreground");
     for (int r = 0; r < 256; r += 32) {
@@ -58,7 +58,7 @@ static void demo_fg_24bit() {
     }
 }
 
-// Demonstrate background colours (4-bit, 8-bit, 24-bit).
+// 演示背景色（4 位、8 位、24 位）。
 static void demo_bg() {
     section("Background Colors");
     for (int i = 0; i < 16; ++i) {
@@ -73,7 +73,7 @@ static void demo_bg() {
     printf("%s  TrueColor BG  %s\n", color::bg(100, 150, 200).c_str(), color::reset().c_str());
 }
 
-// Display the effect of each single SGR text effect.
+// 展示每一种单独的 SGR 文本效果。
 static void demo_effects() {
     section("Text Effects");
     auto effects = {
@@ -87,7 +87,7 @@ static void demo_effects() {
     }
 }
 
-// Show combined effects (e.g. bold + underline).
+// 显示组合效果（例如粗体 + 下划线）。
 static void demo_multi_effects() {
     section("Multiple Effects Combined");
     printf("%sCombined Bold+Underline%s\n",
@@ -98,34 +98,34 @@ static void demo_multi_effects() {
            color::reset().c_str());
 }
 
-// Exercise the colour-space conversion helpers.
+// 测试色彩空间转换辅助函数。
 static void demo_convert() {
     section("Color Space Conversion");
 
-    // Round-trip: RGB → 256 → RGB.
+    // 往返转换：RGB → 256 → RGB。
     auto rgb = Rgb{200, 100, 50};
     auto idx = color::rgb_to_256(rgb.r, rgb.g, rgb.b);
     auto back = color::_256_to_rgb(idx);
     printf("rgb_to_256(%d,%d,%d)  → %3d  → rgb(%d,%d,%d)\n",
            rgb.r, rgb.g, rgb.b, idx, back.r, back.g, back.b);
 
-    // 4-bit → 256.
+    // 4 位 → 256。
     auto c4 = Color4::YELLOW;
     auto c256 = color::_4_to_256(c4);
     printf("_4_to_256(YELLOW) → %d\n", c256);
 
-    // Blend two 256-colour indices.
+    // 混合两个 256 色索引。
     auto blended = color::blend_256(196, 21);
     printf("blend_256(RED=%d, BLUE=%d) → %d\n", 196, 21, blended);
 
-    // Invert a colour.
+    // 反转颜色。
     auto inverted = color::invert_256(color::_4_to_256(Color4::RED));
     printf("invert_256(RED=%d) → %d\n", color::_4_to_256(Color4::RED), inverted);
     auto invRgb = color::_256_to_rgb(inverted);
     printf("  (approx rgb(%d,%d,%d))\n", invRgb.r, invRgb.g, invRgb.b);
 }
 
-// Show the greyscale ramp (256-colour indices 232-255) and conversion.
+// 显示灰阶渐变（256 色索引 232-255）及其转换。
 static void demo_gray_ramp() {
     section("Gray Ramp (232–255)");
     for (int i = 232; i <= 255; ++i) {

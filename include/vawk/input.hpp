@@ -2,21 +2,21 @@
 #define VAWK_INPUT_HPP
 
 // -----------------------------------------------------------------------
-//  vawk::Input — terminal input handler (placeholder / stub)
+//  vawk::Input — 终端输入处理器（占位 / 桩）
 //
-//  This module is intended to bridge vaterm's low-level terminal I/O
-//  (mouse::capture, terminal::read_byte, etc.) into the vawk event
-//  system.
+//  本模块用于把 vaterm 的低层终端 I/O
+//  （mouse::capture、terminal::read_byte 等）桥接到 vawk 事件
+//  系统中。
 //
-//  Currently defined:
-//    - MouseClickEvent  — event type for mouse click/drag events
+//  目前已定义：
+//    - MouseClickEvent  — 鼠标点击/拖动事件的事件类型
 //
-//  Still to implement:
-//    - Keyboard events (key press / release)
-//    - Terminal resize events
-//    - Actual input reading loop that feeds Entity subscribers
+//  尚待实现：
+//    - 键盘事件（按键按下 / 释放）
+//    - 终端大小变化事件
+//    - 真正读取输入并喂给 Entity 订阅者的循环
 //
-//  The Input class below is a stub; start() and stop() do nothing yet.
+//  下面的 Input 类目前是桩实现；start() 与 stop() 暂时什么都不做。
 // -----------------------------------------------------------------------
 
 #include "event_upstream.hpp"
@@ -25,25 +25,25 @@
 
 namespace vawk {
 
-// Forward-declared event types.
+// 前向声明的事件类型。
 
-// Emitted when a mouse button is pressed, released, or dragged.
+// 鼠标按键按下、释放或拖动时发出。
 VAWK_EVENT_DEFINE(MouseClickEvent)
-    float x, y;                   // normalised or cell coordinates
-    std::optional<int> duration;  // time since last press (ms), nullopt = unknown
+    float x, y;                   // 归一化坐标或单元格坐标
+    std::optional<int> duration;  // 距上次按下的时间（毫秒），nullopt = 未知
 VAWK_EVENT_DEFINE_END
 
-// Input handler.
-// This is a placeholder — the implementation is not yet complete.
+// 输入处理器。
+// 这是一个占位实现——尚未完成。
 class Input {
   public:
     Input() = default;
     ~Input() = default;
 
-    // Start listening for input events.
+    // 开始监听输入事件。
     void start();
 
-    // Stop listening for input events.
+    // 停止监听输入事件。
     void stop();
 
   private:

@@ -1,10 +1,10 @@
 # =========================================================================
-#  test/utils/ — vaterm demo programs
+#  test/utils/ — vaterm 演示程序
 #
-#  Targets:
-#    all     — compile all demos
-#    check   — run sys_demo, utf_demo (non-interactive)
-#    clean   — remove binaries
+#  目标：
+#    all     — 编译所有演示
+#    check   — 运行 sys_demo、utf_demo（非交互）
+#    clean   — 删除可执行文件
 # =========================================================================
 
 CXX       := g++

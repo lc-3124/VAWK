@@ -15,7 +15,7 @@
 #include <string_view>
 #include <utility>
 
-// linux
+// Linux 平台
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
@@ -282,7 +282,7 @@ bool input_fsm::step_ground(unsigned char b, std::deque<InputData>& out) {
     if (b == 0x1B) { state_ = State::ESC; acc_.assign(1, '\033'); return false; }
 
     // 三个有专属键名的控制字符
-    if (b == 0x09) { push_key(out, 0, KC::TAB);       return false; }  // Tab
+    if (b == 0x09) { push_key(out, 0, KC::TAB);       return false; }  // 制表符(Tab)
     if (b == 0x0D) { push_key(out, 0, KC::ENTER);     return false; }  // 回车(CR)
     if (b == 0x7F) { push_key(out, 0, KC::BACKSPACE); return false; }  // 退格(DEL)
 

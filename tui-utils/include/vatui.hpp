@@ -2,22 +2,21 @@
 #define VATUI_HPP
 
 // -----------------------------------------------------------------------
-//  vatui — terminal framebuffer toolkit
+//  vatui —— 终端帧缓冲工具库
 //
-//  Builds on vaterm with:
-//    - Framebuffer  — double-buffered cell matrix, diff-based swap,
-//                     UTF-8 / wide-character support, styled fill & text.
-//    - VaTui        — singleton that owns a Framebuffer + a terminal
-//                     instance.
+//  构建在 vaterm 之上，提供：
+//    - Framebuffer  —— 双缓冲单元格矩阵、基于差异的交换，
+//                      支持 UTF-8 / 宽字符、带样式的填充与文本。
+//    - VaTui        —— 单例，持有一个 Framebuffer + 一个终端实例。
 //
-//  Usage:
+//  用法：
 //    auto& tui = VaTui::instance();
 //    tui.init();
 //    auto& fb = tui.buffer();
 //    fb.printText({.col = 0, .row = 0, .text = "Hi", .style = {...}});
 //    fb.swap();
 //
-//  The library is split into hpp (declaration) and cpp (implementation).
+//  本库拆分为 hpp（声明）与 cpp（实现）两部分。
 // -----------------------------------------------------------------------
 
 #include <cstdint>
@@ -31,20 +30,20 @@
 
 namespace vatui {
 
-// ---- colour SGR helpers (immediate conversion) -------------------------
-// Each call detects the terminal's colour depth on first invocation and
-// automatically converts the input to the terminal's native depth.
-// Use inside Style initialisers:
+// ---- 颜色 SGR 辅助函数（立即转换） -------------------------------------
+// 每次调用都会在首次使用时检测终端色深，
+// 并自动把输入转换为终端原生色深。
+// 在 Style 初始化器中使用：
 //   Style{.fg_sgr = fg(Color4::GREEN), .bg_sgr = bg(Color8{196})}
 //
-// Conversion rules (fg&bg):
-//   Color4 → passthrough (4-bit works on any terminal)
-//   Color8 → C24: up-convert via _256_to_rgb
-//            C4:  down-convert via _256_to_rgb + nearest_4bit
-//            C8:  passthrough
-//   Rgb    → C24: passthrough
-//            C8:  down-convert via rgb_to_256
-//            C4:  down-convert via nearest_4bit
+// 转换规则（fg 与 bg 相同）：
+//   Color4 → 直通（4-bit 在任何终端上都可用）
+//   Color8 → C24: 经 _256_to_rgb 升位转换
+//            C4:  经 _256_to_rgb + nearest_4bit 降位转换
+//            C8:  直通
+//   Rgb    → C24: 直通
+//            C8:  经 rgb_to_256 降位转换
+//            C4:  经 nearest_4bit 降位转换
 
 inline std::string fg(vaterm::Color4 c) {
     return vaterm::color::fg(c);
@@ -106,10 +105,10 @@ inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
     return vaterm::color::effect(list);
 }
 
-// ---- style descriptor (pre-computed SGR strings) -----------------------
-// Every colour value is converted to its ANSI SGR sequence at the point
-// of assignment.  fillRegion / printText then simply concatenate the
-// three pieces once and store the result in each Cell::sgr_.
+// ---- 样式描述符（预计算的 SGR 串） -------------------------------------
+// 每个颜色值在赋值时就会被转换成对应的 ANSI SGR 序列。
+// fillRegion / printText 之后只需把三部分拼接一次，
+// 并把结果存入每个 Cell::sgr_。
 //
 //   Style{.fg_sgr = fg(Rgb{255,100,50}),
 //         .bg_sgr = bg(Color4::BLACK),
@@ -117,11 +116,11 @@ inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
 
 struct Style {
     std::string fg_sgr      = vaterm::color::fg(vaterm::Color4::WHITE);
-    std::string bg_sgr      = vatui::bg(vaterm::TRANS);                        // default: no bg (terminal native)
+    std::string bg_sgr      = vatui::bg(vaterm::TRANS);                        // 默认：无背景（沿用终端原生背景）
     std::string effects_sgr = "";
 };
 
-// ---- parameter structs (enables designated-initialiser syntax) -------
+// ---- 参数结构体（支持指定初始化器语法） ------------------------------
 
 struct SizeArgs {
     int col;
@@ -156,34 +155,34 @@ struct FillArgs {
     Style style = {};
 };
 
-// ---- Framebuffer (double-buffered cell matrix) -----------------------
+// ---- Framebuffer（双缓冲单元格矩阵） ---------------------------------
 
 class Framebuffer {
   public:
-    // ── Buffer sizing ───────────────────────────────────────────────
+    // ── 缓冲尺寸 ────────────────────────────────────────────────────
     void setSize(SizeArgs args);
     int  getColMax() const { return max_col_; }
     int  getRowMax() const { return max_row_; }
 
-    // ── Screen offset ───────────────────────────────────────────────
+    // ── 屏幕偏移 ────────────────────────────────────────────────────
     void setPosition(PositionArgs args);
     int  getOffsetCol() const { return off_col_; }
     int  getOffsetRow() const { return off_row_; }
 
-    // ── Drawing ─────────────────────────────────────────────────────
+    // ── 绘制 ────────────────────────────────────────────────────────
     void printText(TextArgs args);
     void clear();
     void clearRegion(RegionArgs args);
     void fillRegion(FillArgs args);
 
-    // ── Import ──────────────────────────────────────────────────────
-    // Copy cells from another Framebuffer onto this one at (off_col, off_row).
-    // Wide-char fragments at the destination are cleaned before overwrite.
-    // Source wide-chars that overflow the destination right edge are
-    // replaced with a space in the source's style.
+    // ── 导入 ────────────────────────────────────────────────────────
+    // 从另一个 Framebuffer 拷贝单元格到本对象的 (off_col, off_row) 处。
+    // 目的地上的宽字符碎片会在覆盖前被清理。
+    // 源中越过目的地右边缘的宽字符，
+    // 会用源自身样式的一个空格替换。
     void importFrame(PositionArgs offset, const Framebuffer& src);
 
-    // ── Output ──────────────────────────────────────────────────────
+    // ── 输出 ────────────────────────────────────────────────────────
     void swap();
 
   private:
@@ -206,19 +205,19 @@ class Framebuffer {
         cell.cp_     = 0;
         cell.isLong_ = false;
         cell.isHead_ = true;
-        // sgr_id_ not touched — caller sets it
+        // 不动 sgr_id_——由调用方设置
     }
 
-    // sgr_id encoding:
-    //   bit 31: has_fg (1 = foreground colour set, 0 = TRANS)
-    //   bit 30: has_bg (1 = background colour set, 0 = TRANS)
-    //   bits 0-29: index into sgr_pool_
+    // sgr_id 编码：
+    //   第 31 位: has_fg（1 = 设置了前景色，0 = TRANS）
+    //   第 30 位: has_bg（1 = 设置了背景色，0 = TRANS）
+    //   第 0-29 位: sgr_pool_ 中的下标
     static uint32_t make_sgr_id_(uint32_t index, bool has_fg, bool has_bg) {
         return (has_fg ? 0x80000000u : 0) | (has_bg ? 0x40000000u : 0) | (index & 0x3FFFFFFF);
     }
 
-    // Intern an SGR string: return its index in the pool (deduplicates
-    // across the pool) encoded with has_fg/has_bg flags in the high bits.
+    // 把一个 SGR 串登记进池中：返回它在池里的下标（在池内去重），
+    // 并把 has_fg/has_bg 标志编码进高位。
     uint32_t intern_sgr_(const std::string& s, bool has_fg, bool has_bg) {
         for (size_t i = 0; i < sgr_pool_.size(); ++i)
             if (sgr_pool_[i] == s)
@@ -227,8 +226,8 @@ class Framebuffer {
         return make_sgr_id_(static_cast<uint32_t>(sgr_pool_.size() - 1), has_fg, has_bg);
     }
 
-    // Extract the foreground SGR sequence from a combined SGR string.
-    // Returns e.g. "\033[31m" or "" if none.
+    // 从合成的 SGR 串中提取前景 SGR 序列。
+    // 返回形如 "\033[31m" 的串；没有则返回 ""。
     static std::string extract_fg_sgr_(const std::string& s) {
         size_t best = std::string::npos;
         // 8/24-bit：\033[38;5;N m 或 \033[38;2;R;G;B m
@@ -250,7 +249,7 @@ class Framebuffer {
         return s.substr(best, end + 1 - best);
     }
 
-    // Extract the background SGR sequence from a combined SGR string.
+    // 从合成的 SGR 串中提取背景 SGR 序列。
     static std::string extract_bg_sgr_(const std::string& s) {
         size_t best = std::string::npos;
         // 8/24-bit：\033[48;5;N m 或 \033[48;2;R;G;B m
@@ -273,7 +272,7 @@ class Framebuffer {
         return s.substr(best, end + 1 - best);
     }
 
-    // Extract all non-colour SGR sequences (effects) from a combined SGR.
+    // 从合成的 SGR 串中提取所有非颜色 SGR 序列（即效果）。
     static std::string extract_effects_sgr_(const std::string& s) {
         std::string r;
         size_t pos = 0;
@@ -284,11 +283,11 @@ class Framebuffer {
             auto seq = s.substr(pos, end + 1 - pos);
             bool is_color = false;
             if (seq.size() > 4 && seq[3] == '8' && s[pos + 4] == ';')
-                is_color = true;                     // 38; or 48;
+                is_color = true;                     // 38; 或 48;
             else if (seq.size() >= 4) {
-                char p1 = seq[2];                    // digit after '[' in "\033["
+                char p1 = seq[2];                    // "\033[" 里 '[' 之后的数字
                 if ((p1 == '3' || p1 == '4') && seq[3] >= '0' && seq[3] <= '7')
-                    is_color = true;                 // 30-37 or 40-47
+                    is_color = true;                 // 30-37 或 40-47
                 if (seq.size() >= 5 && p1 == '1' && seq[3] == '0' && seq[4] >= '0' && seq[4] <= '7')
                     is_color = true;                 // 100-107
                 if (p1 == '9' && seq[3] >= '0' && seq[3] <= '7')
@@ -306,26 +305,26 @@ class Framebuffer {
     int                   off_row_ = 0;
     std::vector<Cell>     buf_;
     bool                  dirty_   = false;
-    std::string           out_buf_;         // reusable swap output buffer
-    std::vector<std::string> sgr_pool_;     // SGR deduplication pool
+    std::string           out_buf_;         // 可复用的 swap 输出缓冲
+    std::vector<std::string> sgr_pool_;     // SGR 去重池
 };
 
-// ---- VaTui singleton -------------------------------------------------
+// ---- VaTui 单例 ------------------------------------------------------
 
 class VaTui {
   public:
     static VaTui& instance();
 
-    // Non-copyable.
+    // 不可拷贝。
     VaTui(const VaTui&) = delete;
     VaTui& operator=(const VaTui&) = delete;
 
-    // ── Lifecycle ───────────────────────────────────────────────────
-    // Enter raw mode, hide cursor, clear screen.
-    // Safe to call multiple times (idempotent).
+    // ── 生命周期 ────────────────────────────────────────────────────
+    // 进入 raw 模式、隐藏光标、清屏。
+    // 可安全地多次调用（幂等）。
     void init();
 
-    // ── Framebuffer access ──────────────────────────────────────────
+    // ── Framebuffer 访问 ────────────────────────────────────────────
     Framebuffer& buffer() { return fb_; }
 
   private:

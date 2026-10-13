@@ -2,27 +2,27 @@
 #define VATERM_TERM_HPP
 
 // -----------------------------------------------------------------------
-//  vaterm::terminal — terminal mode switching, screen control, I/O
+//  vaterm::terminal —— 终端模式切换、屏幕控制与 I/O
 //
-//  The terminal class provides:
+//  terminal 类提供：
 //
-//    1. RAII raw mode:      enter_raw() / ~terminal()  automatically
-//                           restores the original termios on destruction.
-//    2. Screen clear:        clear_screen(), clear_to_eol(),
-//                            clear_to_eos(), clear_line().
-//    3. Terminal query:      size(rows, cols), type().
-//    4. I/O:                 write(), flush(), read_byte(), getch().
+//    1. RAII raw 模式：  enter_raw() / ~terminal() 在析构时
+//                        自动恢复原有的 termios。
+//    2. 清屏：            clear_screen()、clear_to_eol()、
+//                        clear_to_eos()、clear_line()。
+//    3. 终端查询：        size(rows, cols)、type()。
+//    4. I/O：             write()、flush()、read_byte()、getch()。
 //
-//  All static methods (clear_*, size, type, write, flush, read_byte,
-//  getch) are thread-safe and require no instance.  The instance is
-//  only needed for raw-mode management.
+//  所有静态方法（clear_*、size、type、write、flush、read_byte、
+//  getch）都是线程安全的，无需实例。实例仅在
+//  管理 raw 模式时才需要。
 //
-//  Example:
+//  示例：
 //    terminal t;
 //    t.enter_raw();
 //    terminal::write(terminal::clear_screen());
 //    terminal::write("Hello under raw mode!\n");
-//    // ~terminal() restores the original settings automatically.
+//    // ~terminal() 会自动恢复原有设置。
 // -----------------------------------------------------------------------
 
 #include <cstdint>
@@ -43,37 +43,37 @@ class terminal {
     terminal() = default;
     ~terminal();
 
-    // Non-copyable — owns the raw-mode state.
+    // 不可拷贝——持有 raw 模式状态。
     terminal(const terminal&)            = delete;
     terminal& operator=(const terminal&) = delete;
 
-    // ---- Screen-clear sequences (static) --------------------------------
+    // ---- 清屏序列（静态） -----------------------------------------------
 
-    // Clear the entire screen and move the cursor to (1,1).
+    // 清空整个屏幕并把光标移到 (1,1)。
     static std::string clear_screen() {
         return "\033[2J\033[H";
     }
 
-    // Clear from cursor to end of line (EL 0).
+    // 从光标处清到行尾（EL 0）。
     static std::string clear_to_eol() {
         return "\033[K";
     }
 
-    // Clear from cursor to end of screen (ED 0).
+    // 从光标处清到屏幕末尾（ED 0）。
     static std::string clear_to_eos() {
         return "\033[J";
     }
 
-    // Clear the entire current line and return the cursor to column 1.
+    // 清空当前整行并把光标退回第 1 列。
     static std::string clear_line() {
         return "\033[2K\r";
     }
 
-    // ---- Terminal queries (static) --------------------------------------
+    // ---- 终端查询（静态） -----------------------------------------------
 
-    // Query terminal size via the TIOCGWINSZ ioctl.
-    // Returns true on success, false on failure (e.g. not a tty).
-    // On success rows and cols are filled with the detected dimensions.
+    // 通过 TIOCGWINSZ ioctl 查询终端尺寸。
+    // 成功返回 true，失败（例如不是 tty）返回 false。
+    // 成功时 rows 与 cols 会填入检测到的尺寸。
     static bool size(uint16_t& rows, uint16_t& cols) {
         struct winsize ws;
         if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1)
@@ -83,8 +83,8 @@ class terminal {
         return true;
     }
 
-    // Convenience wrappers around size() that return the value directly.
-    // Returns 0 on error (e.g. not a tty).
+    // 对 size() 的便捷包装，直接返回值。
+    // 出错（例如不是 tty）时返回 0。
     static int getColMax() {
         uint16_t r = 0, c = 0;
         return size(r, c) ? static_cast<int>(c) : 0;
@@ -94,20 +94,20 @@ class terminal {
         return size(r, c) ? static_cast<int>(r) : 0;
     }
 
-    // Return the value of the $TERM environment variable,
-    // or an empty string if it is unset.
+    // 返回环境变量 $TERM 的值，
+    // 未设置时返回空串。
     static std::string type() {
         auto* t = getenv("TERM");
         return t ? std::string(t) : std::string();
     }
 
-    // Detect the terminal's maximum supported colour depth by inspecting
-    // $COLORTERM and $TERM.  The result is cached after the first call.
+    // 通过检查 $COLORTERM 与 $TERM 检测终端支持的最大色深。
+    // 结果在首次调用后会被缓存。
     //
-    // Returns:
-    //   C24 — truecolor / 24-bit (e.g. $COLORTERM=truecolor)
-    //   C8  — 256-colour (e.g. $TERM=xterm-256color)
-    //   C4  — 16-colour / otherwise unknown
+    // 返回：
+    //   C24 —— truecolor / 24-bit（例如 $COLORTERM=truecolor）
+    //   C8  —— 256 色（例如 $TERM=xterm-256color）
+    //   C4  —— 16 色 / 其他未知情况
     static ColorDepth detect_color_depth() {
         static ColorDepth depth = [] {
             auto* ct = getenv("COLORTERM");
@@ -121,7 +121,7 @@ class terminal {
                 std::string_view sv(term);
                 if (sv.ends_with("-256color"))
                     return ColorDepth::C8;
-                // Some modern terminals that always support truecolor
+                // 一些始终支持 truecolor 的现代终端
                 if (sv == "xterm-kitty" || sv == "alacritty" || sv == "foot" || sv == "foot-extra")
                     return ColorDepth::C24;
             }
@@ -130,19 +130,19 @@ class terminal {
         return depth;
     }
 
-    // ---- Raw mode (instance methods) ------------------------------------
+    // ---- raw 模式（实例方法） -------------------------------------------
 
-    // Switch stdin to raw mode using cfmakeraw(3).
+    // 使用 cfmakeraw(3) 把 stdin 切到 raw 模式。
     //
-    // Raw mode disables line buffering, signal keys (^C, ^Z),
-    // and echo. After enter_raw(), every key-press is immediately
-    // available via read().
+    // raw 模式会关闭行缓冲、信号键（^C、^Z）
+    // 以及回显。调用 enter_raw() 后，每次按键都可以
+    // 立刻通过 read() 读到。
     //
-    // VMIN = 0, VTIME = 1 gives a non-blocking read with a 100 ms
-    // timeout — read_byte() can return -1 if no data is pending.
+    // VMIN = 0、VTIME = 1 会给出带 100 ms 超时的非阻塞读
+    // —— 若暂无数据待读，read_byte() 会返回 -1。
     //
-    // Returns true on success, false if stdin is not a tty or if
-    // tcgetattr/tcsetattr fails.
+    // 成功返回 true；stdin 不是 tty 或
+    // tcgetattr/tcsetattr 失败时返回 false。
     bool enter_raw() {
         if (raw_) return true;
         if (!isatty(STDIN_FILENO)) return false;
@@ -157,33 +157,33 @@ class terminal {
         return true;
     }
 
-    // Restore the original terminal settings captured by enter_raw().
-    // Called automatically by the destructor.
+    // 恢复 enter_raw() 保存下来的原有终端设置。
+    // 由析构函数自动调用。
     void exit_raw() {
         if (!raw_) return;
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
         raw_ = false;
     }
 
-    // Check whether raw mode is currently active.
+    // 检查当前是否处于 raw 模式。
     bool is_raw() const { return raw_; }
 
-    // ---- I/O (static) ---------------------------------------------------
+    // ---- I/O（静态） ----------------------------------------------------
 
-    // Write a string to stdout.
+    // 向 stdout 写一个字符串。
     static void write(std::string_view s) {
         ::write(STDOUT_FILENO, s.data(), s.size());
     }
 
-    // Flush stdout (fsync). Use after write() to ensure the terminal
-    // receives the data immediately.
+    // 刷新 stdout（fsync）。在 write() 之后调用，
+    // 确保终端立刻收到数据。
     static void flush() {
         fsync(STDOUT_FILENO);
     }
 
-    // Read one byte from stdin without blocking.
-    // In raw mode (VMIN=0, VTIME=1) this returns nullopt after 100 ms if
-    // no data is available.
+    // 从 stdin 非阻塞地读一个字节。
+    // 在 raw 模式（VMIN=0、VTIME=1）下，若 100 ms 内
+    // 无数据可读则返回 nullopt。
     static std::optional<unsigned char> read_byte() {
         unsigned char c;
         auto n = ::read(STDIN_FILENO, &c, 1);
@@ -191,8 +191,8 @@ class terminal {
         return c;
     }
 
-    // Blocking version of read_byte().
-    // Loops until a byte arrives, then returns it as a char.
+    // read_byte() 的阻塞版本。
+    // 循环等待直到有字节到达，然后以 char 返回。
     static char getch() {
         char c;
         while (::read(STDIN_FILENO, &c, 1) <= 0)
@@ -201,8 +201,8 @@ class terminal {
     }
 
   private:
-    bool        raw_ = false;       // whether raw mode is active
-    struct termios original_;       // saved termios before raw mode
+    bool        raw_ = false;       // raw 模式是否处于激活状态
+    struct termios original_;       // raw 模式之前的 termios 备份
 };
 
 inline terminal::~terminal() {

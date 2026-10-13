@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""Generate compile_commands.json entries for header-only projects.
+"""为 header-only 项目生成 compile_commands.json 条目。
 
-compile_commands.json is used by clangd and other LSP servers to
-determine compiler flags for each source file.
+compile_commands.json 供 clangd 及其他 LSP 服务器用来
+确定每个源文件的编译选项。
 
-This script reads any existing compile_commands.json (e.g. produced by
-compiledb from a Makefile build), then appends entries for the header-
-only vaterm and vawk modules so that clangd can syntax-check headers
-that are never compiled as standalone translation units.
+本脚本会读取现有的 compile_commands.json（例如由
+compiledb 从 Makefile 构建生成的结果），然后为 header-only 的
+vaterm 与 vawk 模块追加条目，使 clangd 能够对
+那些从不作为独立翻译单元编译的头文件做语法检查。
 
-Usage:
+用法：
     compiledb make -C test all
     python3 contrib/gen_compdb.py
 """
 
 import json, os, glob
 
-# Project root (two levels up from this script).
+# 项目根目录（从本脚本向上两级）。
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COMPDB = os.path.join(ROOT, "compile_commands.json")
 
-# Common compiler flags for all header entries.
+# 所有头文件条目共用的编译选项。
 INC_PATHS = ["-Iinclude", "-Itui-utils/include"]
 BASE_ARGS = [
     "g++", "--std=c++23",
@@ -28,7 +28,7 @@ BASE_ARGS = [
     "-fsyntax-only", "-x", "c++-header",
 ] + INC_PATHS
 
-# Glob patterns for all headers that should have entries.
+# 应为哪些头文件生成条目所使用的 glob 模式。
 HEADER_PATTERNS = [
     "include/vawk.hpp",
     "include/vawk/*.hpp",
@@ -36,7 +36,7 @@ HEADER_PATTERNS = [
     "tui-utils/include/vaterm/*.hpp",
 ]
 
-# --- Load any existing entries (from compiledb) ---
+# --- 加载已有条目（来自 compiledb）---
 entries = []
 try:
     with open(COMPDB) as f:
@@ -46,7 +46,7 @@ except (FileNotFoundError, json.JSONDecodeError):
 
 seen = {e["file"] for e in entries}
 
-# --- Add missing header entries ---
+# --- 补充缺失的头文件条目 ---
 for pat in HEADER_PATTERNS:
     for hdr in sorted(glob.glob(os.path.join(ROOT, pat))):
         rel = os.path.relpath(hdr, ROOT)
@@ -58,7 +58,7 @@ for pat in HEADER_PATTERNS:
             })
             seen.add(rel)
 
-# --- Write updated database ---
+# --- 写出更新后的数据库 ---
 with open(COMPDB, "w") as f:
     json.dump(entries, f, indent=2)
 

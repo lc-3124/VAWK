@@ -2,18 +2,18 @@
 #define VATERM_ENUMS_HPP
 
 // -----------------------------------------------------------------------
-//  vaterm::enums — shared enumerations and simple data types
+//  vaterm::enums — 共享枚举与简单数据类型
 //
-//  Provides the common type definitions used throughout the vaterm
-//  library. All values correspond to standard ANSI / ECMA-48 parameters.
+//  提供整个 vaterm 库通用的类型定义。所有取值都对应标准的
+//  ANSI / ECMA-48 参数。
 // -----------------------------------------------------------------------
 
 #include <cstdint>
 
 namespace vaterm {
 
-// ---- Terminal color-depth detection ------------------------------------
-//  Ordered from lowest to highest so the enum values can be compared:
+// ---- 终端色深检测 ------------------------------------
+//  从低到高排序，便于比较枚举值：
 //    C4 < C8 < C24
 enum class ColorDepth : uint8_t {
     C4  = 4,
@@ -21,8 +21,8 @@ enum class ColorDepth : uint8_t {
     C24 = 24,
 };
 
-// ---- Cursor direction -------------------------------------------------
-//  Used by cursor::move() to specify which way to shift the cursor.
+// ---- 光标方向 -------------------------------------------------
+//  供 cursor::move() 使用，指定光标移动的方向。
 
 enum class CursorDir : uint8_t {
     UP,
@@ -31,9 +31,9 @@ enum class CursorDir : uint8_t {
     RIGHT,
 };
 
-// ---- Cursor shapes (DECSCUSR) -----------------------------------------
-//  VTxxx cursor-style codes. Supported in xterm, kitty, foot, and most
-//  modern terminals. Values 1-6 correspond to the DECSCUSR parameter.
+// ---- 光标形状 (DECSCUSR) -----------------------------------------
+//  VTxxx 光标样式码。xterm、kitty、foot 及大多数现代终端都支持。
+//  取值 1-6 对应 DECSCUSR 参数。
 
 enum class CursorShape : uint8_t {
     BLINKING_BLOCK      = 1,
@@ -44,9 +44,9 @@ enum class CursorShape : uint8_t {
     STEADY_BAR          = 6,
 };
 
-// ---- ANSI text effects (SGR parameters) -------------------------------
-//  Select Graphic Rendition parameters. Not all terminals support every
-//  effect; RAPID_BLINK in particular is often ignored.
+// ---- ANSI 文本效果 (SGR 参数) -------------------------------
+//  Select Graphic Rendition 参数。并非所有终端都支持每种
+//  效果；尤其是 RAPID_BLINK 常被忽略。
 
 enum class TextEffect : uint8_t {
     RESET           = 0,
@@ -61,9 +61,9 @@ enum class TextEffect : uint8_t {
     STRIKETHROUGH   = 9,
 };
 
-// ---- 4-bit ANSI color palette -----------------------------------------
-//  The sixteen standard terminal colors. Values 0-7 are the "dark" set;
-//  values 8-15 are the corresponding "bright" variants.
+// ---- 4-bit ANSI 调色板 -----------------------------------------
+//  十六种标准终端颜色。取值 0-7 为“暗色”组；
+//  取值 8-15 为对应的高亮变体。
 
 enum class Color4 : uint8_t {
     BLACK           = 0,
@@ -84,30 +84,29 @@ enum class Color4 : uint8_t {
     BRIGHT_WHITE    = 15,
 };
 
-// ---- RGB color triplet ------------------------------------------------
-//  Used by the 24-bit true-color API and the color-space conversion
-//  helpers (rgb_to_256, _256_to_rgb, etc.).
+// ---- RGB 三元组 ------------------------------------------------
+//  供 24-bit 真彩色接口与色彩空间转换辅助函数使用
+//  （rgb_to_256、_256_to_rgb 等）。
 
 struct Rgb {
     uint8_t r, g, b;
 };
 
-// ---- 8-bit (256-colour) index wrapper ----------------------------------
-//  Explicit wrapper to distinguish 8-bit color from a raw uint8_t in
-//  overload resolution.
+// ---- 8-bit (256-colour) 索引封装 ----------------------------------
+//  显式封装，用于在重载解析中把 8-bit 颜色与裸 uint8_t
+//  区分开。
 struct Color8 {
     uint8_t index;
 };
 
-// ---- Transparent colour tag --------------------------------------------
-//  When used as fg/bg in a Style initialiser, produces an empty SGR
-//  string.  On importFrame this means "skip this plane" (no fg / no bg).
-//  On output the terminal renders its default colour (or the underlying
-//  destination content).
+// ---- 透明色标记 --------------------------------------------
+//  在 Style 初始化中作为 fg/bg 使用时，产生空 SGR 字符串。
+//  在 importFrame 中表示“跳过该平面”（不设 fg / 不设 bg）。
+//  输出时终端渲染其默认颜色（或底层的目标内容）。
 struct Trans {};
 inline constexpr Trans TRANS{};
 
-// ---- input module enums -------------------------------------------------
+// ---- 输入模块枚举 -------------------------------------------------
 //  (vaterm::input / vaterm::InputData 使用；定义集中在此，声明见 vaterm/input.hpp)
 
 /**

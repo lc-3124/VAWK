@@ -1,16 +1,16 @@
 // -----------------------------------------------------------------------
-//  sys_demo — demonstrates every function in vaterm::sys
+//  sys_demo — 演示 vaterm::sys 中的每一个函数
 //
-//  Exercises:
-//    sys::user_name()    — login name of the current user
-//    sys::host_name()    — system hostname
-//    sys::env(key)       — environment variable lookup
-//    sys::cwd()          — current working directory
-//    sys::exec(cmd)      — shell command execution via popen
+//  覆盖：
+//    sys::user_name()    — 当前用户的登录名
+//    sys::host_name()    — 系统主机名
+//    sys::env(key)       — 环境变量查询
+//    sys::cwd()          — 当前工作目录
+//    sys::exec(cmd)      — 经由 popen 执行 shell 命令
 //
-//  Each call is followed by a PASS/FAIL assertion.
+//  每次调用后都跟有一个 PASS/FAIL 断言。
 //
-//  Run:  ./sys_demo
+//  运行：  ./sys_demo
 // -----------------------------------------------------------------------
 
 #include <vaterm.hpp>
@@ -19,7 +19,7 @@
 
 using namespace vaterm;
 
-// Helper: print a labelled value.
+// 辅助函数：打印带标签的值。
 static void check(const std::string& label, const std::string& value) {
     printf("  %-15s = \"%s\"\n", label.c_str(), value.c_str());
 }
@@ -62,7 +62,7 @@ int main() {
     // 5. exec()
     printf("\n5. exec()\n");
     auto out = sys::exec("echo 'hello from exec'");
-    out.pop_back();  // remove trailing newline from echo
+    out.pop_back();  // 去掉 echo 末尾的换行
     check("exec(\"echo...\")", out);
     bool exec_ok = (out == "hello from exec");
     printf("  %s\n", exec_ok ? "  PASS" : "  FAIL");
@@ -71,7 +71,7 @@ int main() {
     check("exec(\"invalid\")", fail.empty() ? "(empty)" : fail);
     printf("  %s\n", fail.empty() ? "  PASS (returns empty on failure)" : "  UNEXPECTED");
 
-    // Summary.
+    // 汇总。
     printf("\n%sAll system API tests completed.%s\n",
            color::fg(Color4::GREEN).c_str(), color::reset().c_str());
 

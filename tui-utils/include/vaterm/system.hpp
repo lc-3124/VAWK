@@ -2,17 +2,17 @@
 #define VATERM_SYSTEM_HPP
 
 // -----------------------------------------------------------------------
-//  vaterm::sys — system information helpers
+//  vaterm::sys — 系统信息辅助
 //
-//  A collection of POSIX wrappers that return basic OS-level information.
-//  All functions are stateless and thread-safe (re-entrant).
+//  一组 POSIX 封装，用于返回基础的 OS 级信息。
+//  所有函数均无状态且线程安全（可重入）。
 //
-//  Functions:
-//    user_name()         — login name of the current user
-//    host_name()         — system hostname (nodename)
-//    env(key)            — value of an environment variable
-//    cwd()               — current working directory
-//    exec(command)       — run a command and capture its stdout
+//  函数：
+//    user_name()         — 当前用户的登录名
+//    host_name()         — 系统主机名（nodename）
+//    env(key)            — 环境变量的值
+//    cwd()               — 当前工作目录
+//    exec(command)       — 执行命令并捕获其 stdout
 // -----------------------------------------------------------------------
 
 #include <array>
@@ -25,10 +25,10 @@
 namespace vaterm {
 namespace sys {
 
-// Return the login name of the current user.
+// 返回当前用户的登录名。
 //
-// First tries getpwuid(getuid()), falling back to the $USER
-// environment variable. Returns an empty string if neither succeeds.
+// 先尝试 getpwuid(getuid())，失败则回退到 $USER
+// 环境变量。两者都取不到时返回空字符串。
 inline std::string user_name() {
     auto* pw = getpwuid(getuid());
     if (pw) return pw->pw_name;
@@ -36,8 +36,8 @@ inline std::string user_name() {
     return e ? std::string(e) : std::string();
 }
 
-// Return the system hostname.
-// Uses gethostname() with a 256-byte buffer.
+// 返回系统主机名。
+// 使用 gethostname()，缓冲区 256 字节。
 inline std::string host_name() {
     std::array<char, 256> buf{};
     if (gethostname(buf.data(), buf.size()) == 0) {
@@ -47,27 +47,26 @@ inline std::string host_name() {
     return {};
 }
 
-// Return the value of the environment variable identified by key.
-// Returns an empty string if the variable is not set.
+// 返回键为 key 的环境变量的值。
+// 变量未设置时返回空字符串。
 inline std::string env(const std::string& key) {
     auto* v = getenv(key.c_str());
     return v ? std::string(v) : std::string();
 }
 
-// Return the current working directory.
-// Uses getcwd() with a 4096-byte buffer.
+// 返回当前工作目录。
+// 使用 getcwd()，缓冲区 4096 字节。
 inline std::string cwd() {
     std::array<char, 4096> buf{};
     auto* p = getcwd(buf.data(), buf.size());
     return p ? std::string(p) : std::string();
 }
 
-// Execute a shell command and capture its standard output.
+// 执行一条 shell 命令并捕获其标准输出。
 //
-// Uses popen() with "r" mode. The command is passed to /bin/sh -c.
-// Returns the captured output as a string (including trailing newlines
-// if present). Returns an empty string if popen fails or produces no
-// output.
+// 使用 popen() 的 "r" 模式；命令交给 /bin/sh -c 执行。
+// 返回捕获到的输出字符串（若末尾带换行则一并保留）。
+// popen 失败或没有任何输出时返回空字符串。
 inline std::string exec(const std::string& command) {
     std::string result;
     auto* fp = popen(command.c_str(), "r");

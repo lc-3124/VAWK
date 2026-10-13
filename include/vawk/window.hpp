@@ -2,15 +2,14 @@
 #define VAWK_WINDOW_HPP
 
 // -----------------------------------------------------------------------
-//  vawk::Window — window management system (not yet implemented)
+//  vawk::Window — 窗口管理系统（尚未实现）
 //
-//  This header will define the Window class, which provides a tiled or
-//  floating window container with borders, titles, scrolling regions,
-//  and z-ordering for overlapping windows.
+//  本头文件将定义 Window 类，它提供平铺或浮动的窗口容器，
+//  带有边框、标题、滚动区域，以及用于重叠窗口的 z 序。
 //
-//  Status: on hold.
+//  状态：暂停。
 // -----------------------------------------------------------------------
 
-// Placeholder — Window framework is currently on hold.
+// 占位——Window 框架目前暂停。
 
 #endif  // VAWK_WINDOW_HPP

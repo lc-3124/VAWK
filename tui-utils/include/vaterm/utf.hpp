@@ -2,22 +2,20 @@
 #define VATERM_UTF_HPP
 
 // -----------------------------------------------------------------------
-//  vaterm::utf — UTF-8 string utilities
+//  vaterm::utf — UTF-8 字符串工具
 //
-//  Provides helpers for working with UTF-8 encoded text that are commonly
-//  needed in TUI applications: determining the byte length of a codepoint
-//  from its leading byte, counting codepoints, extracting a codepoint by
-//  index, and computing the terminal display width (with CJK / emoji /
-//  fullwidth awareness based on East Asian Width and Unicode character
-//  properties).
+//  提供 TUI 应用中处理 UTF-8 编码文本时常用的辅助函数：由首字节推断一个
+//  码点的字节长度、统计码点个数、按索引取出码点，以及计算终端显示宽度
+//  （基于 East Asian Width 与 Unicode 字符属性，兼顾 CJK / emoji /
+//  全角字符）。
 //
-//  Most functions accept std::string_view and never allocate; `pop_back`
-//  is the exception — it edits a std::string in place.
+//  大多数函数接受 std::string_view 且从不分配内存；`pop_back` 是例外
+//  ——它就地修改 std::string。
 //
-//  References:
+//  参考：
 //    - RFC 3629 (UTF-8)
 //    - Unicode TR#11 (East Asian Width)
-//    - ECMA-48 / POSIX terminal semantics for control chars
+//    - ECMA-48 / POSIX 控制字符的终端语义
 // -----------------------------------------------------------------------
 
 #include <cstdint>
@@ -27,11 +25,10 @@
 namespace vaterm {
 namespace utf {
 
-// Return the number of bytes occupied by the UTF-8 codepoint whose
-// leading byte is at the start of `s`.
+// 返回首字节位于 `s` 起始处的 UTF-8 码点所占的字节数。
 //
-// Returns 0 if the byte at s[0] is not a valid UTF-8 leading byte
-// (i.e. continuation byte 0x80-0xBF or overlong prefix).
+// 若 s[0] 不是合法的 UTF-8 首字节（即续字节 0x80-0xBF 或过长前缀），
+// 返回 0。
 //
 //   0x00-0x7F  → 1 (ASCII)
 //   0xC2-0xDF  → 2
@@ -48,11 +45,10 @@ inline size_t char_bytes(std::string_view s) {
     return 0;
 }
 
-// Return the number of Unicode codepoints (grapheme clusters are NOT
-// resolved — this counts scalar values) in the UTF-8 string `s`.
+// 返回 UTF-8 字符串 `s` 中 Unicode 码点的个数（不解析字形簇——
+// 这里统计的是标量值）。
 //
-// Invalid continuation bytes are skipped and do not increment the
-// count.
+// 非法的续字节会被跳过，且不计入个数。
 inline size_t count(std::string_view s) {
     size_t n = 0;
     for (size_t i = 0; i < s.size();) {
@@ -64,11 +60,10 @@ inline size_t count(std::string_view s) {
     return n;
 }
 
-// Return the i-th codepoint (0-based) of the UTF-8 string `s` as a
-// view of its raw bytes (1-4 bytes).
+// 返回 UTF-8 字符串 `s` 中第 i 个码点（从 0 开始）的原始字节视图
+// （1-4 字节）。
 //
-// Returns an empty view if i is out of range. Invalid continuation
-// bytes are skipped without incrementing the index.
+// i 越界时返回空视图。非法续字节会被跳过，且不递增索引。
 inline std::string_view at(std::string_view s, size_t i) {
     size_t idx = 0;
     for (size_t pos = 0; pos < s.size();) {
@@ -82,9 +77,9 @@ inline std::string_view at(std::string_view s, size_t i) {
     return {};
 }
 
-// Remove the last codepoint from the UTF-8 string `s` in place.
-// Stray trailing continuation bytes are backed over up to the nearest
-// leading byte first. Typical use: Backspace deleting one character.
+// 就地删除 UTF-8 字符串 `s` 的最后一个码点。
+// 若末尾残留孤立的续字节，会先回退到最近的首字节。典型用途：
+// Backspace 删除一个字符。
 inline void pop_back(std::string& s) {
     size_t i = s.size();
     while (i > 0 && (static_cast<unsigned char>(s[i - 1]) & 0xC0) == 0x80) --i;
@@ -92,18 +87,17 @@ inline void pop_back(std::string& s) {
     s.erase(i);
 }
 
-// Return the terminal display width of the single codepoint whose
-// leading byte is at the start of `s`.
+// 返回首字节位于 `s` 起始处的单个码点的终端显示宽度。
 //
-// Width rules:
-//   - Control characters (U+0000-U+001F, U+007F) → 0
-//   - ASCII printable → 1
+// 宽度规则：
+//   - 控制字符（U+0000-U+001F、U+007F）→ 0
+//   - ASCII 可打印字符 → 1
 //   - East Asian Wide / Fullwidth / CJK / Emoji → 2
-//   - Everything else → 1
+//   - 其它 → 1
 //
-// The wide-range detection covers Hangul Jamo, CJK Unified
-// Ideographs, CJK Compatibility, Fullwidth forms, Kana Supplement,
-// Emoticons (starting at U+1F004), and CJK Extension B-H.
+// 宽字符范围检测覆盖 Hangul Jamo、CJK Unified
+// Ideographs、CJK Compatibility、Fullwidth forms、Kana Supplement、
+// Emoticons（从 U+1F004 起）以及 CJK Extension B-H。
 inline int char_width(std::string_view s) {
     auto cb = char_bytes(s);
     if (cb == 0 || cb == 1) {
@@ -112,7 +106,7 @@ inline int char_width(std::string_view s) {
         if (c < 0x20 || c == 0x7F) return 0;
         return 1;
     }
-    // Decode the multi-byte sequence into a Unicode scalar value.
+    // 把多字节序列解码为 Unicode 标量值。
     auto decode = [](std::string_view sv) -> uint32_t {
         auto b1 = static_cast<unsigned char>(sv[0]);
         auto b2 = static_cast<unsigned char>(sv[1]);
@@ -132,28 +126,28 @@ inline int char_width(std::string_view s) {
     };
     auto cp = decode(s);
 
-    // East Asian Width / CJK classification.
+    // East Asian Width / CJK 分类。
     auto is_wide = [](uint32_t cp) -> bool {
-        if (cp >= 0x1100 && cp <= 0x115F) return true;   // Hangul Jamo
-        if (cp == 0x2329 || cp == 0x232A) return true;   // Angle brackets
-        if (cp >= 0x2E80 && cp <= 0xA4CF) return true;   // CJK radicals + Yi
-        if (cp >= 0xA960 && cp <= 0xA97C) return true;   // Hangul Jamo EA
-        if (cp >= 0xAC00 && cp <= 0xD7AF) return true;   // Hangul Syllables
-        if (cp >= 0xF900 && cp <= 0xFAFF) return true;   // CJK Compatibility Ideographs
-        if (cp >= 0xFE10 && cp <= 0xFE19) return true;   // Vertical forms
-        if (cp >= 0xFE30 && cp <= 0xFE6F) return true;   // CJK Compatibility Forms
-        if (cp >= 0xFF01 && cp <= 0xFF60) return true;   // Fullwidth Forms
-        if (cp >= 0xFFE0 && cp <= 0xFFE6) return true;   // Fullwidth Signs
-        if (cp >= 0x1B000 && cp <= 0x1B0FF) return true; // Kana Supplement
-        if (cp >= 0x1F004) return true;                  // Emoticons & beyond
-        if (cp >= 0x20000 && cp <= 0x3FFFF) return true; // CJK Extension B-H
+        if (cp >= 0x1100 && cp <= 0x115F) return true;   // 谚文字母
+        if (cp == 0x2329 || cp == 0x232A) return true;   // 尖括号
+        if (cp >= 0x2E80 && cp <= 0xA4CF) return true;   // CJK 部首 + 彝文
+        if (cp >= 0xA960 && cp <= 0xA97C) return true;   // 谚文字母扩展 A
+        if (cp >= 0xAC00 && cp <= 0xD7AF) return true;   // 谚文音节
+        if (cp >= 0xF900 && cp <= 0xFAFF) return true;   // CJK 兼容表意文字
+        if (cp >= 0xFE10 && cp <= 0xFE19) return true;   // 竖排形式
+        if (cp >= 0xFE30 && cp <= 0xFE6F) return true;   // CJK 兼容形式
+        if (cp >= 0xFF01 && cp <= 0xFF60) return true;   // 全角形式
+        if (cp >= 0xFFE0 && cp <= 0xFFE6) return true;   // 全角符号
+        if (cp >= 0x1B000 && cp <= 0x1B0FF) return true; // 假名补充
+        if (cp >= 0x1F004) return true;                  // 表情符号及以后
+        if (cp >= 0x20000 && cp <= 0x3FFFF) return true; // CJK 扩展 B-H
         return false;
     };
     return is_wide(cp) ? 2 : 1;
 }
 
-// Return the terminal display width of the UTF-8 string `s` by summing
-// char_width() for each codepoint.
+// 返回 UTF-8 字符串 `s` 的终端显示宽度，即对每个码点累加
+// char_width()。
 inline int width(std::string_view s) {
     int w = 0;
     for (size_t i = 0; i < s.size();) {

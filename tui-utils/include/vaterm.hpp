@@ -2,35 +2,32 @@
 #define VATERM_HPP
 
 // -----------------------------------------------------------------------
-//  vaterm — header-only terminal UI toolkit for Linux (C++23)
+//  vaterm — 面向 Linux 的头文件式终端 UI 工具库（C++23）
 //
-//  A collection of stateless, thread-safe utilities for building TUI
-//  applications. Each module lives in its own header under vaterm/ and
-//  can be included independently.
+//  一组无状态、线程安全的工具，用于构建 TUI 应用。每个模块位于 vaterm/
+//  下的独立头文件中，可单独包含。
 //
-//  Modules:
-//    vaterm::color    — ANSI escape sequences for foreground / background
-//                       colors and text effects (4-bit, 8-bit, 24-bit).
-//    vaterm::cursor   — ANSI escape sequences for cursor movement,
-//                       shape switching, save/restore, show/hide.
-//    vaterm::input    — input engine that takes over the terminal keyboard
-//                       / mouse via a state machine, emitting structured
-//                       InputData events. NOTE: split into input.hpp +
-//                       src/vaterm/input.cpp — the only non-header-only
-//                       module; programs using it must link build/bin.o/input.o.
-//    vaterm::mouse    — SGR-encoded mouse event tracking: enable/disable
-//                       the terminal protocol, parse raw sequences into
-//                       a structured MouseState (button, action, position).
-//    vaterm::terminal — RAII terminal raw mode, clear-screen sequences,
-//                       terminal-size query, blocking / non-blocking I/O.
-//    vaterm::sys      — System-information helpers (user name, host name,
-//                       environment variables, current working directory,
-//                       command execution via popen).
-//    vaterm::utf      — UTF-8 string utilities (byte length of leading
-//                       byte, codepoint count, substring by codepoint
-//                       index, display width with CJK/emoji awareness).
+//  模块：
+//    vaterm::color    — 前景 / 背景色与文本效果的 ANSI 转义序列
+//                       （4-bit、8-bit、24-bit）。
+//    vaterm::cursor   — 光标移动、形状切换、保存/恢复、显示/隐藏的
+//                       ANSI 转义序列。
+//    vaterm::input    — 输入引擎，通过状态机接管终端键盘 / 鼠标，
+//                       产出结构化的 InputData 事件。注意：已拆分为
+//                       input.hpp + src/vaterm/input.cpp——唯一非
+//                       header-only 的模块；使用它的程序必须链接
+//                       build/bin.o/input.o。
+//    vaterm::mouse    — SGR 编码的鼠标事件追踪：启用/禁用终端协议，
+//                       把原始序列解析为结构化的 MouseState
+//                       （按键、动作、位置）。
+//    vaterm::terminal — RAII 终端 raw 模式、清屏序列、终端尺寸查询、
+//                       阻塞 / 非阻塞 I/O。
+//    vaterm::sys      — 系统信息辅助函数（用户名、主机名、环境变量、
+//                       当前工作目录、通过 popen 执行命令）。
+//    vaterm::utf      — UTF-8 字符串工具（首字节的字节长度、码点计数、
+//                       按码点索引取子串、兼顾 CJK/emoji 的显示宽度）。
 //
-//  Example:
+//  示例：
 //    #include <vaterm.hpp>
 //    #include <cstdio>
 //

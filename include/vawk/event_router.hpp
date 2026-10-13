@@ -2,19 +2,17 @@
 #define VAWK_EVENT_ROUTER_HPP
 
 // -----------------------------------------------------------------------
-//  vawk::EventRouter — concrete EventUpstream with push-able buffer
+//  vawk::EventRouter — 带可推送缓冲区的具体 EventUpstream 实现
 //
-//  EventRouter is the simplest EventUpstream implementation: events are
-//  pushed into an internal queue, and dispatch_once() dequeues and
-//  delivers them to registered listeners.
+//  EventRouter 是最简单的 EventUpstream 实现：事件被推入内部队列，
+//  dispatch_once() 将其出队并投递给已注册的监听者。
 //
-//  Typical use:
-//    - Create a single EventRouter as the application event bus.
-//    - Entities subscribe to the router for the event types they care
-//      about.
-//    - Any part of the code can push() events into the router.
-//    - Either call dispatch_once() manually on the main thread, or
-//      use start_event_loop() for background delivery.
+//  典型用法：
+//    - 创建一个 EventRouter 作为应用程序的事件总线。
+//    - 各 Entity 向 router 订阅自己关心的事件类型。
+//    - 代码的任何部分都可以 push() 事件到 router。
+//    - 要么在主线程手动调用 dispatch_once()，要么使用
+//      start_event_loop() 进行后台投递。
 // -----------------------------------------------------------------------
 
 #include "event_upstream.hpp"
@@ -29,16 +27,15 @@ class EventRouter : public EventUpstream {
     EventRouter() = default;
     ~EventRouter() override { stop_event_loop(); }
 
-    // Push a new event into the internal buffer.
-    // Returns true on success (currently always true).
+    // 将一个新事件推入内部缓冲区。
+    // 成功返回 true（目前恒为 true）。
     bool push(std::shared_ptr<event::Base> evt);
 
-    // Dequeue one event and dispatch it to all registered listeners
-    // for that event's type.
+    // 取出一个事件，并投递给所有注册了该事件类型的监听者。
     void dispatch_once() override;
 
-    // Background event loop: repeatedly calls dispatch_once().
-    // Stopped via stop_event_loop().
+    // 后台事件循环：反复调用 dispatch_once()。
+    // 通过 stop_event_loop() 停止。
     void dispatch_loop() override;
 
   protected:

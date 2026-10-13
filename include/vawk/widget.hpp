@@ -2,15 +2,15 @@
 #define VAWK_WIDGET_HPP
 
 // -----------------------------------------------------------------------
-//  vawk::Widget — widget framework (not yet implemented)
+//  vawk::Widget — 控件框架（尚未实现）
 //
-//  This header will define the base Widget class, layout managers
-//  (horizontal / vertical stacks, grids), focus handling, and the
-//  widget tree that forms the core of the VAWK TUI framework.
+//  本头文件将定义基类 Widget、布局管理器
+//  （水平 / 垂直堆叠、网格）、焦点处理，以及构成 VAWK TUI
+//  框架核心的控件树。
 //
-//  Status: on hold.
+//  状态：暂停。
 // -----------------------------------------------------------------------
 
-// Placeholder — Widget framework is currently on hold.
+// 占位——Widget 框架目前暂停。
 
 #endif  // VAWK_WIDGET_HPP

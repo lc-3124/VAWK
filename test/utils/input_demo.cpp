@@ -36,7 +36,7 @@ void output_bar()
 
 int main () 
 {
-  // enter raw mode , start for input
+  // 进入 raw 模式，开始接收输入
   if(!term.enter_raw()){
     vaterm::terminal::write("Entering raw mode failed !");
   }
