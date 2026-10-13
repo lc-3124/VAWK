@@ -10,6 +10,7 @@
   <b>Visual Ansi Widget Kit</b><br>
   <i>静态风味 TUI 框架</i>
 </p>
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lc-3124/VAWK)
 
 <p align="center">
   <img src="https://img.shields.io/badge/C%2B%2B-23-blue?logo=c%2B%2B">
