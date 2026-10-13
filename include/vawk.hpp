@@ -39,13 +39,13 @@
 //    };
 // -----------------------------------------------------------------------
 
-#include "vawk/event.hpp"
-#include "vawk/entity.hpp"
-#include "vawk/event_upstream.hpp"
-#include "vawk/event_router.hpp"
-#include "vawk/input.hpp"
-#include "vawk/widget.hpp"
-#include "vawk/window.hpp"
-#include "vawk/drawable.hpp"
+#include "vawk/core/event.hpp"
+#include "vawk/core/entity.hpp"
+#include "vawk/core/event_upstream.hpp"
+#include "vawk/core/event_router.hpp"
+#include "vawk/core/input.hpp"
+#include "vawk/widget/widget.hpp"
+#include "vawk/widget/window.hpp"
+#include "vawk/widget/drawable.hpp"
 
 #endif  // VAWK_HPP

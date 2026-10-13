@@ -1,68 +1,50 @@
 # =========================================================================
-#  VAWK — Visual Ansi Widget Kit  （根 Makefile）
-#
-#  目标：
-#    all             — 打印状态
-#    check           — 用 -fsyntax-only -Werror 对所有 .hpp 做语法检查
-#    lib             — 编译 src/utils/vatui.cpp → build/bin.o/vatui.o
-#    test            — 构建所有测试/演示程序（委派给 test/）
-#    clean           — 删除构建产物
+#  VAWK — 顶层构建（全自动发现，不含具体文件名）
+#    make        库 + 全部演示 + 头文件检查 + 测试
+#    make lib    lib/libvawk.a 与 lib/libvawk.so
+#    make demo   全部演示项目（单个失败跳过）
+#    make test   测试（单个失败跳过）
+#    make check  语法检查所有公共头文件
+#    make clean
 # =========================================================================
+SHELL := bash
+ROOT  := $(CURDIR)
 
-SHELL        := bash
-CXX          := g++
-CXX_STD      := --std=c++23
-CXX_FLAGS    := -Wall -Wextra -g -fPIC -Werror -fdiagnostics-color=always
-INC_FLAGS    := -Iinclude -Itui-utils/include
+# mk/lib.mk 的库规则先于 all 出现，显式固定默认目标为 all。
+.DEFAULT_GOAL := all
+include mk/common.mk
+include mk/lib.mk
 
-.PHONY: all clean check test lib
+DEMO_PROJECTS := $(patsubst %/Makefile,%,$(shell find demo -mindepth 2 -maxdepth 2 -name Makefile 2>/dev/null))
 
-all:
-	@echo "Use 'make lib' to build the vatui library object."
-	@echo "Use 'make check' to verify header compilation."
-	@echo "Use 'make test' to build all test programs."
+.PHONY: all lib demo test check clean
 
-# 编译检查每个头文件以捕获语法错误。
+all: lib
+	@$(MAKE) --no-print-directory demo
+	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory check
+	@echo "== 全部完成 =="
+
+lib: $(LIB_A) $(LIB_SO)
+
+demo:
+	@skip=0; for d in $(DEMO_PROJECTS); do \
+	  echo ">>> $$d"; \
+	  $(MAKE) --no-print-directory -C $$d ROOT=$(ROOT) || { echo "  !! 跳过（编译失败）：$$d"; skip=1; }; \
+	done; \
+	if [ $$skip -eq 0 ]; then echo "== 演示全部构建成功 =="; else echo "== 有演示被跳过（见上）=="; fi; \
+	exit 0
+
+test:
+	@$(MAKE) --no-print-directory -C test ROOT=$(ROOT)
+
 check:
-	@echo "Checking headers..."
-	@for hdr in include/vawk.hpp include/vawk/*.hpp \
-	            tui-utils/include/vaterm.hpp \
-	            tui-utils/include/vaterm/*.hpp \
-	            tui-utils/include/vatui.hpp; do \
-	    echo "  $$hdr"; \
-	    $(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -fsyntax-only -x c++-header "$$hdr" || \
-	        { echo "FAIL: $$hdr"; exit 1; }; \
+	@for h in $(HDRS); do \
+	  $(CXX) $(CXXSTD) $(HARDWARN) $(INCFLAGS) -fsyntax-only -x c++-header $$h || { echo "  FAIL $$h"; exit 1; }; \
 	done
-	@echo "All headers OK."
-
-# 构建 vatui 库对象。
-lib: build/bin.o/vatui.o build/bin.o/entity.o build/bin.o/event_upstream.o build/bin.o/event_router.o build/bin.o/input.o
-
-build/bin.o/vatui.o: src/utils/vatui.cpp tui-utils/include/vatui.hpp
-	@mkdir -p build/bin.o
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
-
-build/bin.o/input.o: src/vaterm/input.cpp tui-utils/include/vaterm/input.hpp
-	@mkdir -p build/bin.o
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
-
-build/bin.o/entity.o: src/vawk/entity.cpp include/vawk/entity.hpp include/vawk/event_upstream.hpp
-	@mkdir -p build/bin.o
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
-
-build/bin.o/event_upstream.o: src/vawk/event_upstream.cpp include/vawk/event_upstream.hpp
-	@mkdir -p build/bin.o
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
-
-build/bin.o/event_router.o: src/vawk/event_router.cpp include/vawk/event_router.hpp
-	@mkdir -p build/bin.o
-	$(CXX) $(CXX_STD) $(CXX_FLAGS) $(INC_FLAGS) -c $< -o $@
-
-# 构建所有测试/演示程序。
-test: lib
-	$(MAKE) -C test all
+	@echo "== 头文件检查通过（共 $(words $(HDRS)) 个）=="
 
 clean:
-	@rm -rf build/bin.o
-	$(MAKE) -C test clean
-	@echo "Cleaned."
+	@rm -rf build lib
+	@for d in $(DEMO_PROJECTS); do $(MAKE) --no-print-directory -C $$d clean >/dev/null 2>&1 || true; done
+	@echo "== 已清理 build/ 与 lib/ =="

@@ -1,5 +1,5 @@
-#include "vawk/entity.hpp"
-#include "vawk/event_upstream.hpp"
+#include "vawk/core/entity.hpp"
+#include "vawk/core/event_upstream.hpp"
 
 #include <algorithm>
 

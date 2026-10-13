@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COMPDB = os.path.join(ROOT, "compile_commands.json")
 
 # 所有头文件条目共用的编译选项。
-INC_PATHS = ["-Iinclude", "-Itui-utils/include"]
+INC_PATHS = ["-Iinclude"]
 BASE_ARGS = [
     "g++", "--std=c++23",
     "-Wall", "-Wextra",
@@ -30,10 +30,12 @@ BASE_ARGS = [
 
 # 应为哪些头文件生成条目所使用的 glob 模式。
 HEADER_PATTERNS = [
+    "include/vatui.hpp",
+    "include/vaterm.hpp",
+    "include/vaterm/*.hpp",
     "include/vawk.hpp",
-    "include/vawk/*.hpp",
-    "tui-utils/include/vaterm.hpp",
-    "tui-utils/include/vaterm/*.hpp",
+    "include/vawk/core/*.hpp",
+    "include/vawk/widget/*.hpp",
 ]
 
 # --- 加载已有条目（来自 compiledb）---

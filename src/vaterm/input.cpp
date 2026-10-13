@@ -2,7 +2,7 @@
 //  vaterm::input — 实现
 //
 //  input 是 vaterm 里唯一带状态、带后台线程的模块，因此单独编译成 .cpp
-//  （其余模块仍是 header-only）。声明见 tui-utils/include/vaterm/input.hpp。
+//  （其余模块仍是 header-only）。声明见 include/vaterm/input.hpp。
 // ---------------------------------------------------------------------------
 
 #include "vaterm/input.hpp"
