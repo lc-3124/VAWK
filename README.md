@@ -10,7 +10,7 @@
   <b>Visual Ansi Widget Kit</b><br>
   <i>静态风味 TUI 框架</i>
 </p>
-![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lc-3124/VAWK)
+
 
 <p align="center">
   <img src="https://img.shields.io/badge/C%2B%2B-23-blue?logo=c%2B%2B">
@@ -20,6 +20,8 @@
 </p>
 
 ---
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lc-3124/VAWK)
 
 面向 Linux 终端、零外部依赖的 C++23 TUI 框架，自下而上分为 **vaterm**（终端交互）、**vatui**（TUI行为封装）、**vawk**（事件与组件装配系统）三层。
 
