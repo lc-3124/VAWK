@@ -11,6 +11,8 @@
 //
 //  键盘：上下键选择，Enter 确认，Q / Esc / Ctrl+C 退出；
 //        结果页 Enter 或 R 再来一次。
+//  鼠标：点选项即选中，点「确认」出结果，点「重来」回列表；
+//        列表页滚轮上下切换。
 //
 //  注：本程序是纯娱乐 demo，与人无关。
 // -----------------------------------------------------------------------
@@ -62,10 +64,10 @@ struct Item {
 
 constexpr Item kItems[] = {
     {"Rx is gay !",      "Rx 是给！"},
-    {"Miss ko is gay !", "流畅 是给！"},
-    {"Lc3124 is gay !",  "费世玉 是给！"},
-    {"宋翌豪 是给！",    "宋翌豪 是给！"},
-    {"All gay",          "所有人都是给！"},
+    {"Lc3124 是给 !", "Lc3124 是给！"},
+    {"Miss Ko 是给 !",  "Miss Ko 是给！"},
+    {"Forever 是给！",    "Forever 是给！"},
+    {"所有都是给！",          "所有人都是给！"},
 };
 constexpr int kCount = static_cast<int>(sizeof(kItems) / sizeof(kItems[0]));
 
@@ -85,7 +87,7 @@ class QuizApp {
             vaterm::terminal::write("本程序需要真实终端(tty)，请在终端里运行。\r\n");
             return 1;
         }
-        in.disableMouse();   // 键盘问卷：关掉鼠标追踪，保留终端正常的鼠标选择
+        // 沿用 start() 已开启的鼠标追踪：选项与按钮都支持鼠标。
 
         vaterm::input::dumper du(in);
         du.reset();
@@ -105,7 +107,9 @@ class QuizApp {
                 continue;
             }
             if (ev.inputType == vaterm::InputData::InputType::KEYBD)
-                handle(ev.value.keybd);
+                handle_key(ev.value.keybd);
+            else if (ev.inputType == vaterm::InputData::InputType::MOUSE)
+                handle_mouse(ev.value.mouse);
         }
         in.stop();
         return 0;
@@ -151,6 +155,22 @@ class QuizApp {
         ch_ = CARD_H;
         cx_ = (cols_ - cw_) / 2;
         cy_ = (rows_ - ch_) / 2;
+    }
+
+    // ── 鼠标命中用的小矩形 ─────────────────────────────────────────────
+    struct Rect { int x, y, w, h; };
+
+    static bool hit(const Rect& r, int col, int row) {
+        return row >= r.y && row < r.y + r.h && col >= r.x && col < r.x + r.w;
+    }
+
+    Rect item_rect(int i) const {          // 第 i 个选项的可点区域
+        return Rect{cx_ + 1, cy_ + 5 + i, cw_ - 2, 1};
+    }
+
+    Rect button_rect() const {             // 底部按钮（绘制与点击共用）
+        int bw = vaterm::utf::width((mode_ == Mode::Menu) ? " 确认 " : " 重来 ");
+        return Rect{cx_ + cw_ - bw - 2, cy_ + ch_ - 1, bw, 1};
     }
 
     void draw() {
@@ -219,22 +239,21 @@ class QuizApp {
                        .ch = ' ', .style = style(FOOT_BG, FOOT_BG)});
 
         const char* hint = (mode_ == Mode::Menu)
-                         ? "上下键选择 | Enter 确认 | Q 退出"
-                         : "Enter / R 再玩一次 | Q 退出";
+                         ? "上下键选择 | Enter 确认 | 鼠标点选 | Q 退出"
+                         : "Enter / R 再玩一次 | 点「重来」| Q 退出";
         fb.printText({.col = cx_ + 3, .row = fr, .text = hint,
                       .style = style(MUTED, FOOT_BG)});
 
-        // 右侧一个实心按钮
-        const char* btn = (mode_ == Mode::Menu) ? " 确认 " : " 重来 ";
-        int bw = vaterm::utf::width(btn);
-        int bx = cx_ + cw_ - bw - 2;
-        fb.fillRegion({.col = bx, .row = fr, .w = bw, .h = 1,
+        // 右下角一个实心按钮（位置由 button_rect() 统一给出，便于点击命中）
+        const Rect b = button_rect();
+        fb.fillRegion({.col = b.x, .row = b.y, .w = b.w, .h = b.h,
                        .ch = ' ', .style = style(HEADER, HEADER)});
-        fb.printText({.col = bx, .row = fr, .text = btn,
+        fb.printText({.col = b.x, .row = b.y,
+                      .text = (mode_ == Mode::Menu) ? " 确认 " : " 重来 ",
                       .style = style(WHITE, HEADER, true)});
     }
 
-    void handle(const vaterm::InputData::KeybdData& k) {
+    void handle_key(const vaterm::InputData::KeybdData& k) {
         using KC = vaterm::InputData::KeyCode;
 
         // 退出：Ctrl+C / Esc / Q
@@ -253,6 +272,49 @@ class QuizApp {
                 mode_ = Mode::Menu;
         }
         need_redraw_ = true;
+    }
+
+    void handle_mouse(const vaterm::InputData::MouseData& m) {
+        using MB = vaterm::InputData::MouseButton;
+        using MA = vaterm::InputData::MouseAction;
+
+        if (mode_ == Mode::Menu) {
+            // 滚轮上下切换选项
+            if (m.action == MA::SCROLL_UP) {
+                sel_ = (sel_ + kCount - 1) % kCount;
+                need_redraw_ = true;
+                return;
+            }
+            if (m.action == MA::SCROLL_DOWN) {
+                sel_ = (sel_ + 1) % kCount;
+                need_redraw_ = true;
+                return;
+            }
+
+            const bool left = (m.action == MA::PRESS && m.button == MB::LEFT);
+            const bool grab = left || m.action == MA::DRAG;   // 按下或按住拖动
+
+            if (grab) {
+                // 落在哪一行就选哪一项（拖动经过也随之高亮）
+                for (int i = 0; i < kCount; ++i) {
+                    if (hit(item_rect(i), m.col, m.row)) {
+                        if (sel_ != i) { sel_ = i; need_redraw_ = true; }
+                        return;
+                    }
+                }
+                // 点「确认」按钮 → 出结果
+                if (left && hit(button_rect(), m.col, m.row)) {
+                    mode_ = Mode::Result;
+                    need_redraw_ = true;
+                }
+            }
+        } else if (m.action == MA::PRESS && m.button == MB::LEFT) {
+            // 结果页：点「重来」回列表
+            if (hit(button_rect(), m.col, m.row)) {
+                mode_ = Mode::Menu;
+                need_redraw_ = true;
+            }
+        }
     }
 };
 
