@@ -12,6 +12,7 @@
  * 和实现。
  */
 
+// 标准库
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -23,10 +24,12 @@
 #include <thread>
 #include <utility>
 
+// linux
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 
+// vawk
 #include "term.hpp"
 
 /**
@@ -58,7 +61,7 @@ namespace vaterm {
  *
  * lc3124(260923): inputData的负载中，使用联合体来节约内存，毕竟一个输入事件只会
  * 是鼠标或者键盘中的一个，要不然就是空的。
- * 除此之外，inputDate还有一些子结构，用于定义InputData的行为和输入本身
+ * 除此之外，inputData还有一些子结构，用于定义InputData的行为和输入本身
  */
 struct InputData {
     // ── 子结构定义 ─────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ struct InputData {
      *
      * lc3124(260923):NON 表示“空包”;
      * 一般用户用了非阻塞的输入获取，但缓冲区没有数据
-     * 或者阻塞模式的输入获取接口超时了，我们便返回一个空包给他。
+     * 或者阻塞模式的输入获取接口超时了，就会取得一个空包。
      */
     enum class InputType : uint8_t {
         MOUSE = 0,  ///< 鼠标事件
@@ -137,7 +140,8 @@ struct InputData {
      *
      * 键盘特殊键码（可打印键请用 KeybdData::cp，此时 code 保持 NONE）。
      *
-     * lc3124(260923):特殊键无法用字符表示，用枚举区分；书面值交给 KeyPrintf。
+     * lc3124(260923):特殊键无法用字符表示，用枚举区分；书面值可以用KeyPrintf
+     * 来编码。
      */
     enum class KeyCode : int {
         NONE = 0,
@@ -153,8 +157,8 @@ struct InputData {
      *
      * 键盘事件负载。
      *
-     * lc3124(260923):cp 存 Unicode 码点（含 CJK,我们把从输入法搞进来的CJK字符
-     * 判定为一次键盘输入，这是TUI的输入引擎和GUI很大的区别之体现）；
+     * lc3124(260923):cp 存 Unicode 码点（含 CJK,我们把从输入法搞进来的一个完整
+     * 的CJK字符判定为一次键盘输入)；
      */
     struct KeybdData {
         char32_t cp      = 0;              ///< 可打印键的 Unicode 码点（无则 0）
@@ -164,7 +168,7 @@ struct InputData {
         bool     isCtrl  = false;          ///< 是否按下 Ctrl
     };
 
-    // ── 实际负载 ───────────────────────────────────────────────────────────
+    // ── 负载 ───────────────────────────────────────────────────────────────
     // ───────────────────────────────────────────────────────────────────────
 
     InputType inputType = InputType::NON;  ///< 当前包的类型
@@ -174,7 +178,7 @@ struct InputData {
      *
      * 事件负载；按 inputType 读取 mouse 或 keybd。
      *
-     * lc3124(260923):这个负载永远是用构造函数构建而不是其他方式侵入式组装的。
+     * lc3124(260923):负载在设计上应该是用构造函数构建,而不是其他方式侵入式组装的。
      */
     union Value {
         MouseData mouse;  ///< 鼠标
@@ -191,9 +195,6 @@ struct InputData {
      *
      * 构造一个空包（inputType = NON）。
      *
-     * lc3124(260923):空包用于表达“没有事件”,在构建数据包的时候，使用NON来够建
-     * 一个空的包，消费者在获取数据包的窗口期中没有拿到有有效信息的数据包，那
-     * 么进行这个行为的函数就会构建一个空的数据包返回给调用者。
      */
     InputData();
 
@@ -206,7 +207,7 @@ struct InputData {
      * 返回:
      * InputData , inputType 为 MOUSE 的数据包
      *
-     * lc3124(260923):统一在这里设置标签和负载，避免用户手写联合体。
+     * lc3124(260923):统一在这里设置标签和负载。
      */
     static InputData makeMouse(const MouseData& m);
 
@@ -218,8 +219,6 @@ struct InputData {
      *
      * 返回:
      * InputData , inputType 为 KEYBD 的数据包
-     *
-     * lc3124(260923):统一在这里设置标签和负载，避免用户手写联合体。
      */
     static InputData makeKeybd(const KeybdData& k);
 };
@@ -249,7 +248,7 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
 /**
  * lc3124(260923):
  * 此处设计一套方案让用户拿到键码之后可以通过InputPrintf()来获取这个键码对于的书面打印值
- * 以便于用户输键码，避免解析键码为书面值的相关代码污染用户的业务。
+ * 以便于用户输键码，避免「解析键码为书面值」的相关代码污染用户的业务。
  */
 
 /**
@@ -259,23 +258,36 @@ inline InputData InputData::makeKeybd(const KeybdData& k) {
  * char32_t cp ， 用于接受码点
  *
  * 返回:
- * std::string , 准换好的字符串，wstring让人火大，我专门写了一个库用string处理宽字符
+ * std::string , 换好的字符串，wstring写起来让人火大，我专门弄了一个utf库用string处理宽字符。
  *
  * lc3124(260923):把 Unicode 码点编码成 UTF-8 字符串（供 KeyPrintf 复用；虽然和vaterm::utf模块的职责
- * 交叉，但是这个模块是输入引擎的必要功能，我设计让它和其他模块解耦）。
+ * 交叉，但是这个模块是输入引擎的必要功能，我不打算让这个模块依赖于vaterm::utf模块）。
  */
 inline std::string encode_utf8(char32_t cp) {
     std::string s;
+
+    // UTF-8 是变长编码，按码点范围决定用几个字节；
+    // 首字节带上「有几个字节」的前缀，后续字节一律是 10xxxxxx 形式的续字节：
+    //
+    //   0x00    .. 0x7F     → 1 字节  0xxxxxxx
+    //   0x80    .. 0x7FF    → 2 字节  110xxxxx 10xxxxxx
+    //   0x800   .. 0xFFFF   → 3 字节  1110xxxx 10xxxxxx 10xxxxxx
+    //   0x10000 .. 0x10FFFF → 4 字节  11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+
     if (cp < 0x80) {
+        // ASCII：单字节，码点本身就是字节值
         s += static_cast<char>(cp);
     } else if (cp < 0x800) {
+        // 2 字节：高 5 位写入首字节，低 6 位写入续字节
         s += static_cast<char>(0xC0 | (cp >> 6));
         s += static_cast<char>(0x80 | (cp & 0x3F));
     } else if (cp < 0x10000) {
+        // 3 字节：覆盖基本多文种平面，日常 CJK 汉字都走这里
         s += static_cast<char>(0xE0 | (cp >> 12));
         s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
         s += static_cast<char>(0x80 | (cp & 0x3F));
     } else {
+        // 4 字节：增补平面，如 emoji、罕见汉字
         s += static_cast<char>(0xF0 | (cp >> 18));
         s += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
         s += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
