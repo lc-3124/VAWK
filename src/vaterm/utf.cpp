@@ -1,4 +1,4 @@
-// vaterm::utf —— 声明与实现的分离版：实现集中在此处。
+//- vaterm::utf — 实现
 
 #include "vaterm/utf.hpp"
 

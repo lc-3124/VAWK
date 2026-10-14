@@ -1,4 +1,4 @@
-// vaterm::color —— 声明与实现的分离版：实现集中在此处。
+//- vaterm::color — 实现
 // 头文件 include/vaterm/color.hpp 只保留函数声明与纯转发的便捷重载。
 
 #include "vaterm/color.hpp"

@@ -1,5 +1,4 @@
-// -----------------------------------------------------------------------
-//  who_is_gay.cpp — VAWK 演示：「谁最给？」问卷（浅色主题）
+//- who_is_gay.cpp — VAWK 演示：「谁最给？」问卷（浅色主题）
 //
 //  用 VAWK 现有的能力拼一个接近 GUI 观感的界面：
 //    - vatui::Framebuffer  — 整屏重绘：黑色页面底 / 白色卡片 / 标题条 /
@@ -15,7 +14,6 @@
 //        列表页滚轮上下切换。
 //
 //  注：本程序是纯娱乐 demo，与人无关。
-// -----------------------------------------------------------------------
 
 #include <vatui.hpp>
 
@@ -32,7 +30,7 @@ namespace {
 
 using vaterm::Rgb;
 
-// ── 浅色主题调色板 ─────────────────────────────────────────────────────
+//- 浅色主题调色板
 constexpr Rgb PAGE      {  0,   0,   0};   // 页面底（黑）
 constexpr Rgb PAGE_TX   {230, 233, 240};   // 页面底上的文字
 constexpr Rgb CARD      {255, 255, 255};   // 卡片
@@ -56,7 +54,7 @@ vatui::Style style(Rgb f, Rgb b, bool bold = false) {
     return s;
 }
 
-// ── 选项 ───────────────────────────────────────────────────────────────
+//- 选项
 struct Item {
     std::string_view label;    ///< 列表里显示的文字
     std::string_view result;   ///< 选中后「恭喜！<result>」里的部分
@@ -73,7 +71,7 @@ constexpr int kCount = static_cast<int>(sizeof(kItems) / sizeof(kItems[0]));
 
 } // namespace
 
-// ── 应用 ───────────────────────────────────────────────────────────────
+//- 应用
 
 class QuizApp {
   public:
@@ -157,7 +155,7 @@ class QuizApp {
         cy_ = (rows_ - ch_) / 2;
     }
 
-    // ── 鼠标命中用的小矩形 ─────────────────────────────────────────────
+    //-- 鼠标命中用的小矩形
     struct Rect { int x, y, w, h; };
 
     static bool hit(const Rect& r, int col, int row) {

@@ -1,6 +1,4 @@
-// -----------------------------------------------------------------------
-//  vatui.cpp — VaTui 实现
-// -----------------------------------------------------------------------
+//- vatui.cpp — VaTui 实现
 
 #include "vatui.hpp"
 
@@ -11,7 +9,7 @@
 
 #include <string>
 
-// ── 匿名命名空间辅助 ───────────────────────────────────────────────────
+//- 匿名命名空间辅助
 
 namespace {
 
@@ -49,7 +47,7 @@ int cp_width(char32_t cp) {
     return 1;
 }
 
-// ── 颜色降位 ------------------------------------------------------------
+//- 颜色降位
 // 把 256 色 / 真彩色按目标色深折算成 SGR 序列。
 // ch 决定序列用于前景还是背景——fg() 与 bg() 唯一的差别就在这一步。
 enum class SGR_Channel { FG, BG };
@@ -84,9 +82,7 @@ std::optional<vaterm::ColorDepth> g_forced, g_probed;
 
 } // 匿名命名空间
 
-// =====================================================================
-//  Framebuffer
-// =====================================================================
+//- Framebuffer
 
 namespace vatui {
 
@@ -144,7 +140,7 @@ void Framebuffer::setPosition(PositionArgs args) {
     off_row_ = args.row;
 }
 
-// ── 文本输出 ───────────────────────────────────────────────────────────
+//- 文本输出
 
 void Framebuffer::printText(TextArgs args) {
     auto  col   = args.col;
@@ -252,7 +248,7 @@ void Framebuffer::printText(TextArgs args) {
     }
 }
 
-// ── 清屏 ───────────────────────────────────────────────────────────────
+//- 清屏
 
 void Framebuffer::clear() {
     dirty_ = true;
@@ -271,7 +267,7 @@ void Framebuffer::clearRegion(RegionArgs args) {
                 .ch = ' ', .style = {}});
 }
 
-// ── 图形 ───────────────────────────────────────────────────────────────
+//- 图形
 
 void Framebuffer::fillRegion(FillArgs args) {
     auto  col   = args.col;
@@ -311,7 +307,7 @@ void Framebuffer::fillRegion(FillArgs args) {
     }
 }
 
-// ── 帧导入 ──────────────────────────────────────────────────────────────
+//- 帧导入
 
 void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
     if (&src == this) return;
@@ -335,7 +331,7 @@ void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
 
             auto& dst_cell = cell_at_(dc, dr);
 
-            // ── 头部位置处的碎片清理 ──
+            //-- 头部位置处的碎片清理
             if (!dst_cell.isHead_ && dst_cell.isLong_ && dc > 0) {
                 auto old = cell_at_(dc - 1, dr).sgr_id_;
                 reset_cell_(cell_at_(dc - 1, dr));
@@ -396,7 +392,7 @@ void Framebuffer::importFrame(PositionArgs offset, const Framebuffer& src) {
     }
 }
 
-// ── 输出 ───────────────────────────────────────────────────────────────
+//- 输出
 
 void Framebuffer::swap() {
     if (!dirty_) return;
@@ -441,9 +437,7 @@ void Framebuffer::swap() {
     dirty_ = false;
 }
 
-// =====================================================================
-//  VaTui
-// =====================================================================
+//- VaTui
 
 VaTui::VaTui() {
     auto cols = vaterm::terminal::getColMax();

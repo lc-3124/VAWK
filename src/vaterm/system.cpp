@@ -1,4 +1,4 @@
-// vaterm::sys —— 声明与实现的分离版：实现集中在此处。
+//- vaterm::sys — 实现
 
 #include "vaterm/system.hpp"
 

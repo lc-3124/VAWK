@@ -1,8 +1,7 @@
 #ifndef VATERM_HPP
 #define VATERM_HPP
 
-// -----------------------------------------------------------------------
-//  vaterm — 面向 Linux 的头文件式终端 UI 工具库（C++23）
+//- vaterm — 面向 Linux 的头文件式终端 UI 工具库（C++23）
 //
 //  一组无状态、线程安全的工具，用于构建 TUI 应用。每个模块位于 vaterm/
 //  下的独立头文件中，可单独包含。
@@ -37,7 +36,6 @@
 //               vaterm::color::reset().c_str());
 //        return 0;
 //    }
-// -----------------------------------------------------------------------
 
 #include "vaterm/enums.hpp"
 #include "vaterm/color.hpp"

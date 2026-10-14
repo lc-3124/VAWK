@@ -1,5 +1,4 @@
-// -----------------------------------------------------------------------
-//  input_demo.cpp — vaterm 层：模拟一个输入框（打一键，上一字）
+//- input_demo.cpp — vaterm 层：模拟一个输入框（打一键，上一字）
 //
 //  只用 vaterm：
 //    - vaterm::terminal  — raw 模式、清屏/清行、写与 flush
@@ -11,7 +10,6 @@
 //    每按一个可打印键（含 CJK），就在“输入框”那一行里多显示一个字；
 //    Backspace 删一字；Enter 清空；Esc / Ctrl+C 退出。
 //  这是纯 vaterm 的演示，不涉及 vatui 的帧缓冲。
-// -----------------------------------------------------------------------
 
 #include <vaterm.hpp>
 #include <vaterm/input.hpp>   // vaterm::input / InputData / encode_utf8

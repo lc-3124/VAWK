@@ -1,4 +1,4 @@
-// vaterm::terminal —— 声明与实现的分离版：实现集中在此处。
+//- vaterm::terminal — 实现
 
 #include "vaterm/term.hpp"
 

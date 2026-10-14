@@ -1,9 +1,7 @@
-// ---------------------------------------------------------------------------
-//  vaterm::input — 实现
+//- vaterm::input — 实现
 //
 //  input 是 vaterm 里唯一带状态、带后台线程的模块，因此单独编译成 .cpp
 //  （其余模块仍是 header-only）。声明见 include/vaterm/input.hpp。
-// ---------------------------------------------------------------------------
 
 #include "vaterm/input.hpp"
 #include "vaterm/term.hpp"
@@ -22,7 +20,7 @@
 
 namespace vaterm {
 
-// ── InputData 实现 ──────────────────────────────────────────────────────────
+//- InputData 实现
 
 // 默认构造：inputType 的类内初值就是 NON，联合体负载不用碰，于是得到一个“空包”。
 InputData::InputData() {}
@@ -49,18 +47,16 @@ InputData InputData::makeKeybd(const KeybdData& k) {
     return d;
 }
 
-/**
- * vaterm::encode_utf8(...)
- *
- * 参数：
- * char32_t cp ， 用于接受码点
- *
- * 返回:
- * std::string , 换好的字符串，wstring写起来让人火大，我专门弄了一个utf库用string处理宽字符。
- *
- * lc3124(260923):把 Unicode 码点编码成 UTF-8 字符串供 KeyPrintf 复用；虽然和vaterm::utf模块
- * 的职责交叉，但是这个模块是输入引擎的必要功能，我不打算让这个模块依赖于vaterm::utf模块。
- */
+ // vaterm::encode_utf8(...)
+ //
+ // 参数：
+ // char32_t cp ， 用于接受码点
+ //
+ // 返回:
+ // std::string , 换好的字符串，wstring写起来让人火大，我专门弄了一个utf库用string处理宽字符。
+ //
+ // lc3124(260923):把 Unicode 码点编码成 UTF-8 字符串供 KeyPrintf 复用；虽然和vaterm::utf模块
+ // 的职责交叉，但是这个模块是输入引擎的必要功能，我不打算让这个模块依赖于vaterm::utf模块。
 std::string encode_utf8(char32_t cp) {
     std::string s;
 
@@ -94,18 +90,16 @@ std::string encode_utf8(char32_t cp) {
     return s;
 }
 
-/**
- * vaterm::KeyPrintf(const InputData::KeybdData& key)
- *
- * 完整键（含普通键）→ 显示串。
- *
- * 参数：
- * const InputData::KeybdData& key ， 键盘负载
- *
- * 返回:
- * std::string , 无修饰的普通键返回字符本身；
- *               其余返回 KeyPrintf(code)解析出来的字面 
- */
+ // vaterm::KeyPrintf(const InputData::KeybdData& key)
+ //
+ // 完整键（含普通键）→ 显示串。
+ //
+ // 参数：
+ // const InputData::KeybdData& key ， 键盘负载
+ //
+ // 返回:
+ // std::string , 无修饰的普通键返回字符本身；
+ //               其余返回 KeyPrintf(code)解析出来的字面
 std::string KeyPrintf(const InputData::KeybdData& key) {
     const bool special = key.code != InputData::KeyCode::NONE;
 
@@ -124,17 +118,15 @@ std::string KeyPrintf(const InputData::KeybdData& key) {
     return "<" + mods + name + ">";                         // <Ctrl+a>
 }
 
-/**
- * vaterm::MousePrintf(const InputData::MouseData& m)
- *
- * 完整鼠标事件 → 显示串。
- *
- * 参数：
- * const InputData::MouseData& m ， 鼠标负载
- *
- * 返回:
- * std::string , 形如 "<MOUSE (5,7) LEFT PRESS Ctrl>"
- */
+ // vaterm::MousePrintf(const InputData::MouseData& m)
+ //
+ // 完整鼠标事件 → 显示串。
+ //
+ // 参数：
+ // const InputData::MouseData& m ， 鼠标负载
+ //
+ // 返回:
+ // std::string , 形如 "<MOUSE (5,7) LEFT PRESS Ctrl>"
 std::string MousePrintf(const InputData::MouseData& m) {
     std::string s = "<MOUSE (";
     s += std::to_string(m.col);
@@ -154,19 +146,17 @@ std::string MousePrintf(const InputData::MouseData& m) {
     return s;
 }
 
-/**
- * vaterm::InputPrintf(const InputData& e)
- *
- * 任意输入事件 → 显示串（键盘走 KeyPrintf，鼠标走 MousePrintf）。
- *
- * 参数：
- * const InputData& e ， 任意输入事件
- *
- * 返回:
- * std::string , 事件的书面表示；NON 返回 ""
- *
- * lc3124(260923):给用户一个统一的打印入口，键鼠通吃。
- */
+ // vaterm::InputPrintf(const InputData& e)
+ //
+ // 任意输入事件 → 显示串（键盘走 KeyPrintf，鼠标走 MousePrintf）。
+ //
+ // 参数：
+ // const InputData& e ， 任意输入事件
+ //
+ // 返回:
+ // std::string , 事件的书面表示；NON 返回 ""
+ //
+ // lc3124(260923):给用户一个统一的打印入口，键鼠通吃。
 std::string InputPrintf(const InputData& e) {
     switch (e.inputType) {
     case InputData::InputType::KEYBD: return KeyPrintf(e.value.keybd);
@@ -176,21 +166,19 @@ std::string InputPrintf(const InputData& e) {
     return "";
 }
 
-// ── input_fsm 实现 ──────────────────────────────────────────────────────────
+//- input_fsm 实现
 
-/**
- * vaterm::input_fsm::feed(unsigned char b, ...) — 单字节驱动入口
- *
- * 把当前状态对应的 step_* 跑一遍；若它返回 true，表示“这一个字节还没处理完、
- * 请在新状态下再来一次”，于是循环重跑，直到某个 step_* 返回 false。
- *
- * 参数：
- * unsigned char b ， 输入字节
- * std::deque<InputData>& out ， 事件输出队列
- *
- * 返回:
- * 无
- */
+ // vaterm::input_fsm::feed(unsigned char b, ...) — 单字节驱动入口
+ //
+ // 把当前状态对应的 step_* 跑一遍；若它返回 true，表示“这一个字节还没处理完、
+ // 请在新状态下再来一次”，于是循环重跑，直到某个 step_* 返回 false。
+ //
+ // 参数：
+ // unsigned char b ， 输入字节
+ // std::deque<InputData>& out ， 事件输出队列
+ //
+ // 返回:
+ // 无
 void input_fsm::feed(unsigned char b, std::deque<InputData>& out) {
     bool reprocess = true;  // 这个字节还要不要（在新状态下）再处理一次？
     while (reprocess) {
@@ -206,11 +194,9 @@ void input_fsm::feed(unsigned char b, std::deque<InputData>& out) {
     }
 }
 
-/**
- * vaterm::input_fsm::feed(std::string_view, ...) — 批量入口
- *
- * 逐个字节调用单字节版本，顺序与入参一致。
- */
+ // vaterm::input_fsm::feed(std::string_view, ...) — 批量入口
+ //
+ // 逐个字节调用单字节版本，顺序与入参一致。
 void input_fsm::feed(std::string_view bytes, std::deque<InputData>& out) {
     for (unsigned char b : bytes) feed(b, out);  // 逐字节投喂
 }
@@ -220,13 +206,11 @@ bool input_fsm::pending() const {
     return state_ != State::GROUND;
 }
 
-/**
- * vaterm::input_fsm::flush_pending(...)
- *
- * lc3124(261013): 首字节为ESC的话，有可能是用户按下了ESC键，也有可能是终端发来了
- * 转义序列，如果接受到ESC后，迟迟没有拿到转义序列的结束标志，就一律收敛为ESC按键来
- * 处理。reprocess标志就是为了这个情况设计的。
- */
+ // vaterm::input_fsm::flush_pending(...)
+ //
+ // lc3124(261013): 首字节为ESC的话，有可能是用户按下了ESC键，也有可能是终端发来了
+ // 转义序列，如果接受到ESC后，迟迟没有拿到转义序列的结束标志，就一律收敛为ESC按键来
+ // 处理。reprocess标志就是为了这个情况设计的。
 void input_fsm::flush_pending(std::deque<InputData>& out) {
     if (state_ == State::ESC) {
         push_key(out, 0, InputData::KeyCode::ESC);
@@ -240,39 +224,35 @@ void input_fsm::reset() {
     acc_.clear();
 }
 
-/**
- * vaterm::input_fsm::push_key(...)
- *
- * 组装一个键盘事件并入队。用 InputData::makeKeybd 统一设置标签与负载，
- * 避免外部手写联合体。
- *
- * 参数：
- * cp    ， 可打印键的码点（特殊键传 0）
- * code  ， 特殊键码（普通键传 KeyCode::NONE）
- * shift/alt/ctrl ， 修饰位
- */
+ // vaterm::input_fsm::push_key(...)
+ //
+ // 组装一个键盘事件并入队。用 InputData::makeKeybd 统一设置标签与负载，
+ // 避免外部手写联合体。
+ //
+ // 参数：
+ // cp    ， 可打印键的码点（特殊键传 0）
+ // code  ， 特殊键码（普通键传 KeyCode::NONE）
+ // shift/alt/ctrl ， 修饰位
 void input_fsm::push_key(std::deque<InputData>& out, char32_t cp,
                          InputData::KeyCode code,
                          bool shift, bool alt, bool ctrl) {
     out.push_back(InputData::makeKeybd({cp, code, shift, alt, ctrl}));
 }
 
-/**
- * vaterm::input_fsm::step_ground(...)
- *
- * GROUND不在任何序列之中,这个状态下，逐字节识别普通输入。
- * 绝大多数按键都在这里一次处理完；只有 ESC、UTF-8 首字节会把状态机推向别的状态。
- * 字节分类按优先级依次判断：
- * 转义(0x1B) > 具名控制键 > Ctrl 组合键 > 可打印 ASCII > UTF-8 首字节 > 其余丢弃。
- *
- * 参数：
- * unsigned char b ， 当前字节
- * std::deque<InputData>& out ， 事件输出队列
- *
- * 返回:
- * bool , 恒为 false ，GROUND 是收敛态，不会出现同一字节需在新状态再处理的
- *        情况（返回值约定见 step_* 系列总说明：true 代表请在新状态下重处理该字节）。
- */
+ // vaterm::input_fsm::step_ground(...)
+ //
+ // GROUND不在任何序列之中,这个状态下，逐字节识别普通输入。
+ // 绝大多数按键都在这里一次处理完；只有 ESC、UTF-8 首字节会把状态机推向别的状态。
+ // 字节分类按优先级依次判断：
+ // 转义(0x1B) > 具名控制键 > Ctrl 组合键 > 可打印 ASCII > UTF-8 首字节 > 其余丢弃。
+ //
+ // 参数：
+ // unsigned char b ， 当前字节
+ // std::deque<InputData>& out ， 事件输出队列
+ //
+ // 返回:
+ // bool , 恒为 false ，GROUND 是收敛态，不会出现同一字节需在新状态再处理的
+ //        情况（返回值约定见 step_* 系列总说明：true 代表请在新状态下重处理该字节）。
 bool input_fsm::step_ground(unsigned char b, std::deque<InputData>& out) {
     using KC = InputData::KeyCode;
 
@@ -325,18 +305,16 @@ bool input_fsm::step_ground(unsigned char b, std::deque<InputData>& out) {
     return false;
 }
 
-/**
- * vaterm::input_fsm::step_esc(...)
- *
- * ESC(0x1B) 之后到来的第一个字节，决定这条转义序列到底是哪一种：
- *   '['         CSI控制序列
- *   'O'         SS3
- *   0x20-0x7E   Alt+<该可打印字符>
- *   其它        认定最初的 ESC 是“单独按下的 Esc 键”，且当前字节不属于任何
- *                转义序列，返回 true 让它在 GROUND 态重新处理。
- *
- * 返回 true -> 需要新状态下重处理该字节（见 step_* 系列总说明）。
- */
+ // vaterm::input_fsm::step_esc(...)
+ //
+ // ESC(0x1B) 之后到来的第一个字节，决定这条转义序列到底是哪一种：
+ //   '['         CSI控制序列
+ //   'O'         SS3
+ //   0x20-0x7E   Alt+<该可打印字符>
+ //   其它        认定最初的 ESC 是“单独按下的 Esc 键”，且当前字节不属于任何
+ //                转义序列，返回 true 让它在 GROUND 态重新处理。
+ //
+ // 返回 true -> 需要新状态下重处理该字节（见 step_* 系列总说明）。
 bool input_fsm::step_esc(unsigned char b, std::deque<InputData>& out) {
     // '['：转入 CSI；累积字节记下这个 '['（后面 parse_csi 要去头）
     if (b == '[') { state_ = State::CSI; acc_ += '['; return false; }
@@ -354,15 +332,13 @@ bool input_fsm::step_esc(unsigned char b, std::deque<InputData>& out) {
     return true;
 }
 
-/**
- * vaterm::input_fsm::step_csi(...)
- *
- * CSI 序列的累积态。逐步把字节追加到 acc_，直到出现终止字节。
- * CSI 的一般形式：ESC '[' <参数字节> <终止字节>，终止字节落在 0x40-0x7E。
- * NOTICE: 以 ESC '[' '<' 开头的是 SGR 鼠标序列，转入 MOUSE 态专门累积。
- *
- * 返回：恒为 false（本函数自己收敛）。
- */
+ // vaterm::input_fsm::step_csi(...)
+ //
+ // CSI 序列的累积态。逐步把字节追加到 acc_，直到出现终止字节。
+ // CSI 的一般形式：ESC '[' <参数字节> <终止字节>，终止字节落在 0x40-0x7E。
+ // NOTICE: 以 ESC '[' '<' 开头的是 SGR 鼠标序列，转入 MOUSE 态专门累积。
+ //
+ // 返回：恒为 false（本函数自己收敛）。
 bool input_fsm::step_csi(unsigned char b, std::deque<InputData>& out) {
     acc_ += static_cast<char>(b);
     // 第 3 字节是 '<' ， 这是 SGR 鼠标序列 \033[<Cb;Cx;CyM/m，转 MOUSE 态
@@ -381,14 +357,12 @@ bool input_fsm::step_csi(unsigned char b, std::deque<InputData>& out) {
     return false;
 }
 
-/**
- * vaterm::input_fsm::step_ss3(...)
- *
- * SS3 序列：ESC 'O' <单字节>。常见于 xterm 的 F1-F4。
- * 本函数接收 ESC 'O' 之后的那个字节，映射成对应功能键。
- *
- * 返回：恒为 false。
- */
+ // vaterm::input_fsm::step_ss3(...)
+ //
+ // SS3 序列：ESC 'O' <单字节>。常见于 xterm 的 F1-F4。
+ // 本函数接收 ESC 'O' 之后的那个字节，映射成对应功能键。
+ //
+ // 返回：恒为 false。
 bool input_fsm::step_ss3(unsigned char b, std::deque<InputData>& out) {
     using KC = InputData::KeyCode;
     // xterm 约定'P'..'S' 对应 F1..F4，其余暂不处理
@@ -403,14 +377,12 @@ bool input_fsm::step_ss3(unsigned char b, std::deque<InputData>& out) {
     return false;
 }
 
-/**
- * vaterm::input_fsm::step_mouse(...)
- *
- * SGR 鼠标序列的累积态：从 ESC '[' '<' 之后开始，一直累积到终止字节
- * 'M'（按下/滚轮/移动）或 'm'（松开），再交给 parse_mouse 解析。
- *
- * 返回：恒为 false。
- */
+ // vaterm::input_fsm::step_mouse(...)
+ //
+ // SGR 鼠标序列的累积态：从 ESC '[' '<' 之后开始，一直累积到终止字节
+ // 'M'（按下/滚轮/移动）或 'm'（松开），再交给 parse_mouse 解析。
+ //
+ // 返回：恒为 false。
 bool input_fsm::step_mouse(unsigned char b, std::deque<InputData>& out) {
     acc_ += static_cast<char>(b);
     if (b == 'M' || b == 'm') {   // 序列结束，解析
@@ -422,17 +394,15 @@ bool input_fsm::step_mouse(unsigned char b, std::deque<InputData>& out) {
     return false;
 }
 
-/**
- * vaterm::input_fsm::step_utf8(...)
- *
- * UTF-8 多字节字符的累积态。第一个字节（进入本态时已存入 acc_）决定总长度：
- *   0xC2-0xDF 共 2 字节
- *   0xE0-0xEF 共 3 字节（含绝大多数 CJK）
- *   0xF0-0xF7 共 4 字节（emoji、罕见字）
- * 每来一个续字节就校验它是否形如 10xxxxxx；到齐后按位拼出 Unicode 码点。
- *
- * 返回：恒为 false。
- */
+ // vaterm::input_fsm::step_utf8(...)
+ //
+ // UTF-8 多字节字符的累积态。第一个字节（进入本态时已存入 acc_）决定总长度：
+ //   0xC2-0xDF 共 2 字节
+ //   0xE0-0xEF 共 3 字节（含绝大多数 CJK）
+ //   0xF0-0xF7 共 4 字节（emoji、罕见字）
+ // 每来一个续字节就校验它是否形如 10xxxxxx；到齐后按位拼出 Unicode 码点。
+ //
+ // 返回：恒为 false。
 bool input_fsm::step_utf8(unsigned char b, std::deque<InputData>& out) {
     acc_ += static_cast<char>(b);
     auto lead = static_cast<unsigned char>(acc_[0]);
@@ -463,21 +433,19 @@ bool input_fsm::step_utf8(unsigned char b, std::deque<InputData>& out) {
     return false;
 }
 
-/**
- * vaterm::input_fsm::parse_csi(...)
- *
- * 把累积阶段拿到的 CSI 参数串解析成键盘事件。
- * 形式：<参数> <终止字节>，其中 <参数> 可能为空（如方向键 "A"）、
- * 或形如 "n"（如 "~" 系功能键）、或 "n;m"（m 是修饰键编码）。
- *
- * 参数：
- * std::string_view params ， 去掉了 "\033[" 与终止字节的中间串
- * char final ， 终止字节（决定序列的“大类”）
- * std::deque<InputData>& out ， 事件输出队列
- *
- * 返回:
- * 无
- */
+ // vaterm::input_fsm::parse_csi(...)
+ //
+ // 把累积阶段拿到的 CSI 参数串解析成键盘事件。
+ // 形式：<参数> <终止字节>，其中 <参数> 可能为空（如方向键 "A"）、
+ // 或形如 "n"（如 "~" 系功能键）、或 "n;m"（m 是修饰键编码）。
+ //
+ // 参数：
+ // std::string_view params ， 去掉了 "\033[" 与终止字节的中间串
+ // char final ， 终止字节（决定序列的“大类”）
+ // std::deque<InputData>& out ， 事件输出队列
+ //
+ // 返回:
+ // 无
 void input_fsm::parse_csi(std::string_view params, char final,
                           std::deque<InputData>& out) {
     using KC = InputData::KeyCode;
@@ -538,21 +506,19 @@ void input_fsm::parse_csi(std::string_view params, char final,
     push_key(out, 0, code, shift, alt, ctrl);
 }
 
-/**
- * vaterm::input_fsm::parse_mouse(...)
- *
- * 解析一条完整的 SGR 鼠标序列，形如：
- *     ESC [ < Cb ; Cx ; Cy M|m
- *
- * 参数：
- * const std::string& seq ， 完整序列（含头尾）
- * std::deque<InputData>& out ， 事件输出队列
- *
- * 返回:
- * 无，格式不合法则静默丢弃
- *
- * lc3124(261013): 太难看了，能跑就差不多了。
- */
+ // vaterm::input_fsm::parse_mouse(...)
+ //
+ // 解析一条完整的 SGR 鼠标序列，形如：
+ //     ESC [ < Cb ; Cx ; Cy M|m
+ //
+ // 参数：
+ // const std::string& seq ， 完整序列（含头尾）
+ // std::deque<InputData>& out ， 事件输出队列
+ //
+ // 返回:
+ // 无，格式不合法则静默丢弃
+ //
+ // lc3124(261013): 太难看了，能跑就差不多了。
 void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>& out) {
     // 先做头部/尾部格式校验：至少 6 字节且形如 ESC [ <
     if (seq.size() < 6 || seq[0] != '\033' || seq[1] != '[' || seq[2] != '<') return;
@@ -608,7 +574,7 @@ void input_fsm::parse_mouse(const std::string& seq, std::deque<InputData>& out) 
     out.push_back(InputData::makeMouse(m));
 }
 
-// ── input 实现 ──────────────────────────────────────────────────────────────
+//- input 实现
 
 // 默认构造：各成员由类内初值初始化（未启动、状态 OFF）。
 input::input() = default;
@@ -617,18 +583,16 @@ input::input() = default;
 input::~input() { stop(); }
 
 
-/**
- * vaterm::input::start()
- *
- * 正式接管终端输入：
- *   1) 要求调用方已把终端切到 raw 模式（本模块不负责切）；
- *   2) 打开鼠标追踪（1000/1002/1006 三个 DECSET）；
- *   3) 清空缓冲、递增世代（让旧 dumper 知道游标失效）；
- *   4) 启动后台解析线程 reader_loop()。
- * 幂等：已启动时直接返回 true。
- *
- * 返回：成功 true；终端不在 raw 模式则 false。
- */
+ // vaterm::input::start()
+ //
+ // 正式接管终端输入：
+ //   1) 要求调用方已把终端切到 raw 模式（本模块不负责切）；
+ //   2) 打开鼠标追踪（1000/1002/1006 三个 DECSET）；
+ //   3) 清空缓冲、递增世代（让旧 dumper 知道游标失效）；
+ //   4) 启动后台解析线程 reader_loop()。
+ // 幂等：已启动时直接返回 true。
+ //
+ // 返回：成功 true；终端不在 raw 模式则 false。
 bool input::start() {
     std::lock_guard<std::mutex> lk(lifecycle_);   // 串行化 start/stop
     if (running_) return true;                     // 已启动
@@ -662,14 +626,12 @@ bool input::start() {
     return true;
 }
 
-/**
- * vaterm::input::stop()
- *
- * 交还输入：置停止标志并唤醒等待者 → 回收后台线程 → 清空缓冲、推进世代 →
- * 关闭鼠标追踪（仅当此前确实 start 过，避免打扰终端）。幂等。
- *
- * 返回：恒为 true。
- */
+ // vaterm::input::stop()
+ //
+ // 交还输入：置停止标志并唤醒等待者 → 回收后台线程 → 清空缓冲、推进世代 →
+ // 关闭鼠标追踪（仅当此前确实 start 过，避免打扰终端）。幂等。
+ //
+ // 返回：恒为 true。
 bool input::stop() {
     std::lock_guard<std::mutex> lk(lifecycle_);
     running_ = false;          // 通知 reader_loop 退出
@@ -743,20 +705,18 @@ void input::update_state() {
 }
 
 
-/**
- * vaterm::input::reader_loop()
- *
- * 后台解析线程主体。循环做三件事：
- *   1) poll(stdin, 50ms) 等可读；
- *   2) 把此刻确实可读的字节全部读出，喂给状态机 fsm_，产出事件；
- *   3) 把产出的事件 enqueue 进环形缓冲，并唤醒消费者。
- * 关键点：
- *   - poll 超时(50ms) 会 flush_pending()，把半截的孤立 ESC 收敛成 Esc 键；
- *   - 排空字节前先用 poll(...,0) 预检，避免 read_byte() 在非 raw/管道上阻塞；
- *   - 识别到 HUP/ERR/NVAL，或“可读却反复读不到”，判定输入源结束并停止。
- *
- * lc3124(261012): 这一段代码不是我写的，我需要花一些时间来理清楚这玩意。
- */
+ // vaterm::input::reader_loop()
+ //
+ // 后台解析线程主体。循环做三件事：
+ //   1) poll(stdin, 50ms) 等可读；
+ //   2) 把此刻确实可读的字节全部读出，喂给状态机 fsm_，产出事件；
+ //   3) 把产出的事件 enqueue 进环形缓冲，并唤醒消费者。
+ // 关键点：
+ //   - poll 超时(50ms) 会 flush_pending()，把半截的孤立 ESC 收敛成 Esc 键；
+ //   - 排空字节前先用 poll(...,0) 预检，避免 read_byte() 在非 raw/管道上阻塞；
+ //   - 识别到 HUP/ERR/NVAL，或“可读却反复读不到”，判定输入源结束并停止。
+ //
+ // lc3124(261012): 这一段代码不是我写的，我需要花一些时间来理清楚这玩意。
 void input::reader_loop() {
     std::deque<InputData> produced;   // 本轮解析出的事件暂存
     int idle_ready = 0;   // 连续“poll 说可读却读不到”的次数，用于识别 EOF
@@ -765,10 +725,8 @@ void input::reader_loop() {
         int r = ::poll(&pfd, 1, 50);  // 最多等 50ms
         if (r < 0) continue;          // 被信号打断等：重试
 
-        /**
-         * 如果终端发来escape序列，按理来说应该读到序列结束，但是如果esc序列
-         * 长时间没有终止，那就不等来，直接收敛
-         */
+         // 如果终端发来escape序列，按理来说应该读到序列结束，但是如果esc序列
+         // 长时间没有终止，那就不等来，直接收敛
         if (r == 0) {                 // 超时：收敛孤立的 Esc
             idle_ready = 0;
             fsm_.flush_pending(produced);
@@ -807,13 +765,11 @@ void input::reader_loop() {
     }
 }
 
-/** 
- * 把这一轮解析出的事件写进共享环形缓冲，并唤醒消费者：
- *   - 键盘被禁用时丢弃 KEYBD 事件（其它类型照常）；
- *   - 每条事件分配递增序号 seq_，作为 dumper 游标的依据；
- *   - 缓冲超长时从头部丢最旧的（保留最近 VATERM_INPUT_BUFFER_SIZE 条）。
- * 只在真正入队成功时 notify，避免无谓唤醒。
- */
+ // 把这一轮解析出的事件写进共享环形缓冲，并唤醒消费者：
+ //   - 键盘被禁用时丢弃 KEYBD 事件（其它类型照常）；
+ //   - 每条事件分配递增序号 seq_，作为 dumper 游标的依据；
+ //   - 缓冲超长时从头部丢最旧的（保留最近 VATERM_INPUT_BUFFER_SIZE 条）。
+ // 只在真正入队成功时 notify，避免无谓唤醒。
 void input::enqueue(std::deque<InputData>& produced) {
     if (produced.empty()) return;
     bool pushed = false;
@@ -857,13 +813,11 @@ InputData input::getInput() {
     return latest(InputData::InputType::NON);
 }
 
-/**
- * vaterm::input::waitInput(...)
- *
- * 阻塞等待“新出现的”匹配事件（不消费）。判据是缓冲末尾的序号 > 进入函数时的 seq_，
- * 即等待期间必须真的有新事件入队；仅缓冲里存在旧匹配项不算。
- * timeout_ms < 0 无限等待；超时或引擎被 stop 返回空包(NON)。
- */
+ // vaterm::input::waitInput(...)
+ //
+ // 阻塞等待“新出现的”匹配事件（不消费）。判据是缓冲末尾的序号 > 进入函数时的 seq_，
+ // 即等待期间必须真的有新事件入队；仅缓冲里存在旧匹配项不算。
+ // timeout_ms < 0 无限等待；超时或引擎被 stop 返回空包(NON)。
 InputData input::waitInput(InputData::InputType type, int timeout_ms) {
     std::unique_lock<std::mutex> lock(m_);
     const std::uint64_t start = seq_;   // 进入时的写入序号
@@ -889,9 +843,7 @@ InputData input::waitInput(int timeout_ms) {
 }
 
 
-/**
- * 倾倒器实现
- */
+ // 倾倒器实现
 
 // 构造：把游标对齐到该 input 的当前最新序号——只倾倒此后新产生的事件。
 input::dumper::dumper(input& in) : in_(&in) {
@@ -907,14 +859,12 @@ const input::Entry* input::dumper::next_unread() {
     return nullptr;
 }
 
-/**
- * vaterm::input::dumper::dump(...)
- *
- * 取“游标之后最旧的那条”未读事件并前进游标。若已追平最新则等待新事件。
- * 若等待期间引擎换代（start/stop 清空过缓冲），先把游标重对齐到最新，
- * 避免旧游标指向不存在的序号。
- * timeout_ms < 0 无限等待；超时或引擎停止返回空包(NON)。
- */
+ // vaterm::input::dumper::dump(...)
+ //
+ // 取“游标之后最旧的那条”未读事件并前进游标。若已追平最新则等待新事件。
+ // 若等待期间引擎换代（start/stop 清空过缓冲），先把游标重对齐到最新，
+ // 避免旧游标指向不存在的序号。
+ // timeout_ms < 0 无限等待；超时或引擎停止返回空包(NON)。
 InputData input::dumper::dump(int timeout_ms) {
     std::unique_lock<std::mutex> lock(in_->m_);
 

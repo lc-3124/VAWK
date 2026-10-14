@@ -1,8 +1,7 @@
 #ifndef VAWK_HPP
 #define VAWK_HPP
 
-// -----------------------------------------------------------------------
-//  vawk — Visual Ansi Widget Kit（核心事件框架）
+//- vawk — Visual Ansi Widget Kit（核心事件框架）
 //
 //  在 vaterm 终端库之上，提供一套用于构建 TUI 应用的事件驱动框架。
 //
@@ -37,7 +36,6 @@
 //          }
 //      }
 //    };
-// -----------------------------------------------------------------------
 
 #include "vawk/core/event.hpp"
 #include "vawk/core/entity.hpp"

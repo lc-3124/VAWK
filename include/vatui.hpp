@@ -1,13 +1,12 @@
 #ifndef VATUI_HPP
 #define VATUI_HPP
 
-// -----------------------------------------------------------------------
-//  vatui —— 终端帧缓冲工具库
+//- vatui —— 终端帧缓冲工具库
 //
 //  构建在 vaterm 之上，提供：
-//    - Framebuffer  —— 双缓冲单元格矩阵、基于差异的交换，
-//                      支持 UTF-8 / 宽字符、带样式的填充与文本。
-//    - VaTui        —— 单例，持有一个 Framebuffer + 一个终端实例。
+//    Framebuffer  —— 双缓冲单元格矩阵、基于差异的交换，
+//                    支持 UTF-8 / 宽字符、带样式的填充与文本。
+//    VaTui        —— 单例，持有一个 Framebuffer + 一个终端实例。
 //
 //  用法：
 //    auto& tui = VaTui::instance();
@@ -17,7 +16,6 @@
 //    fb.swap();
 //
 //  本库拆分为 hpp（声明）与 cpp（实现）两部分。
-// -----------------------------------------------------------------------
 
 #include <cstdint>
 #include <initializer_list>
@@ -32,22 +30,8 @@
 
 namespace vatui {
 
-// ---- 颜色 SGR 辅助函数（立即转换） -------------------------------------
-// 每次调用都会在首次使用时检测终端色深，
-// 并自动把输入转换为终端原生色深。
-// 在 Style 初始化器中使用：
-//   Style{.fg_sgr = fg(Color4::GREEN), .bg_sgr = bg(Color8{196})}
+//- 颜色 SGR 辅助函数（立即转换）
 //
-// 转换规则（fg 与 bg 相同）：
-//   Color4 → 直通（4-bit 在任何终端上都可用）
-//   Color8 → C24: 经 _256_to_rgb 升位转换
-//            C4:  经 _256_to_rgb + nearest_4bit 降位转换
-//            C8:  直通
-//   Rgb    → C24: 直通
-//            C8:  经 rgb_to_256 降位转换
-//            C4:  经 nearest_4bit 降位转换
-
-// ---- 颜色 SGR 辅助函数（立即转换） -------------------------------------
 // 每次调用都在首次使用时检测终端色深（此后缓存），
 // 并自动把输入转换为终端原生色深。
 // 在 Style 初始化器中使用：
@@ -64,31 +48,55 @@ namespace vatui {
 //
 // 实现见 src/vatui.cpp。
 
-// 前景色（把输入转换为当前色深下的 SGR 序列）。
+/**
+ * @brief 前景色：把输入转换为当前色深下的 SGR 序列。
+ * @param c 4-bit / 8-bit / 24-bit 颜色，或 Trans。
+ * @return 对应的前景色 SGR 串。
+ */
 std::string fg(vaterm::Color4 c);
 std::string fg(vaterm::Color8 c);
 std::string fg(vaterm::Rgb c);
 std::string fg(vaterm::Trans);
 
-// 背景色（同上）。
+/**
+ * @brief 背景色：把输入转换为当前色深下的 SGR 序列。
+ * @param c 4-bit / 8-bit / 24-bit 颜色，或 Trans（产生空串）。
+ * @return 对应的背景色 SGR 串。
+ */
 std::string bg(vaterm::Color4 c);
 std::string bg(vaterm::Color8 c);
 std::string bg(vaterm::Rgb c);
 std::string bg(vaterm::Trans);
 
-// 把一组 SGR 效果合并成一条转义序列。
+/**
+ * @brief 把一组 SGR 效果合并成一条转义序列。
+ * @param list 效果列表。
+ * @return 形如 "\033[1;4m" 的合并序列。
+ */
 std::string effects(std::initializer_list<vaterm::TextEffect> list);
 
-// ---- 终端色深访问点 ----------------------------------------------------
+//- 终端色深访问点
+//
 // 首次调用探测一次并缓存。set_color_depth() 可强制指定色深（测试 / 手动
 // 降级时用），传 std::nullopt 则恢复自动探测。
 //
 // 这是全库唯一持有色深状态的地方：原先每个 fg/bg 重载都自带一个函数内
 // static 缓存，彼此重复且无法在测试中注入。
+
+/**
+ * @brief 当前终端色深；首次调用探测并缓存。
+ * @return C4 / C8 / C24。
+ */
 vaterm::ColorDepth color_depth();
+
+/**
+ * @brief 强制指定色深（测试 / 手动降级）。
+ * @param depth 目标色深；传 std::nullopt 恢复自动探测。
+ */
 void set_color_depth(std::optional<vaterm::ColorDepth> depth);
 
-// ---- 样式描述符（预计算的 SGR 串） -------------------------------------
+//- 样式描述符（预计算的 SGR 串）
+//
 // 每个颜色值在赋值时就会被转换成对应的 ANSI SGR 序列。
 // fillRegion / printText 之后只需把三部分拼接一次，
 // 并把结果存入每个 Cell::sgr_。
@@ -97,75 +105,116 @@ void set_color_depth(std::optional<vaterm::ColorDepth> depth);
 //         .bg_sgr = bg(Color4::BLACK),
 //         .effects_sgr = effects({TextEffect::BOLD})}
 
+/**
+ * @brief 一组预计算好的 SGR 串，供填充 / 文本绘制使用。
+ */
 struct Style {
-    std::string fg_sgr      = vaterm::color::fg(vaterm::Color4::WHITE);
-    std::string bg_sgr      = vatui::bg(vaterm::TRANS);                        // 默认：无背景（沿用终端原生背景）
-    std::string effects_sgr = "";
+    std::string fg_sgr      = vaterm::color::fg(vaterm::Color4::WHITE);  ///< 前景 SGR 串
+    std::string bg_sgr      = vatui::bg(vaterm::TRANS);                   ///< 背景 SGR 串（默认空 = 沿用终端原生背景）
+    std::string effects_sgr = "";                                         ///< 效果 SGR 串（默认空）
 };
 
-// ---- 参数结构体（支持指定初始化器语法） ------------------------------
+//- 参数结构体（支持指定初始化器语法）
 
+/** @brief setSize 的参数。 */
 struct SizeArgs {
-    int col;
-    int row;
+    int col; ///< 列数
+    int row; ///< 行数
 };
 
+/** @brief setPosition / importFrame 的参数。 */
 struct PositionArgs {
-    int col;
-    int row;
+    int col; ///< 列偏移
+    int row; ///< 行偏移
 };
 
+/** @brief printText 的参数。 */
 struct TextArgs {
-    int         col;
-    int         row;
-    std::string_view text;
-    Style            style = {};
+    int              col;  ///< 起始列
+    int              row;  ///< 起始行
+    std::string_view text; ///< 待绘制文本
+    Style            style = {}; ///< 样式
 };
 
+/** @brief clearRegion 的参数。 */
 struct RegionArgs {
-    int col;
-    int row;
-    int w;
-    int h;
+    int col; ///< 起始列
+    int row; ///< 起始行
+    int w;   ///< 宽
+    int h;   ///< 高
 };
 
+/** @brief fillRegion 的参数。 */
 struct FillArgs {
-    int  col;
-    int  row;
-    int  w;
-    int  h;
-    char ch;
-    Style style = {};
+    int   col; ///< 起始列
+    int   row; ///< 起始行
+    int   w;   ///< 宽
+    int   h;   ///< 高
+    char  ch;  ///< 填充字符
+    Style style = {}; ///< 样式
 };
 
-// ---- Framebuffer（双缓冲单元格矩阵） ---------------------------------
+//- Framebuffer（双缓冲单元格矩阵）
 
+/**
+ * @brief 双缓冲单元格矩阵，负责按差异输出到终端。
+ *
+ * 所有绘制都写入缓冲区，最后统一由 swap() 与上一帧比较后增量输出。
+ * 私有成员仅供 VaTui 访问（friend）。
+ */
 class Framebuffer {
   public:
-    // ── 缓冲尺寸 ────────────────────────────────────────────────────
+
+    //-- 缓冲尺寸
+
+    /** @brief 重设缓冲尺寸并按新尺寸清空。 */
     void setSize(SizeArgs args);
-    int  getColMax() const { return max_col_; }
-    int  getRowMax() const { return max_row_; }
 
-    // ── 屏幕偏移 ────────────────────────────────────────────────────
+    /** @brief 当前缓冲列数。 */
+    int getColMax() const { return max_col_; }
+
+    /** @brief 当前缓冲行数。 */
+    int getRowMax() const { return max_row_; }
+
+    //-- 屏幕偏移
+
+    /** @brief 设置输出到屏幕的偏移（左上角落点）。 */
     void setPosition(PositionArgs args);
-    int  getOffsetCol() const { return off_col_; }
-    int  getOffsetRow() const { return off_row_; }
 
-    // ── 绘制 ────────────────────────────────────────────────────────
+    /** @brief 当前列偏移。 */
+    int getOffsetCol() const { return off_col_; }
+
+    /** @brief 当前行偏移。 */
+    int getOffsetRow() const { return off_row_; }
+
+    //-- 绘制
+
+    /** @brief 在 (col,row) 处绘制一段带样式的文本。 */
     void printText(TextArgs args);
+
+    /** @brief 用默认样式清空整个缓冲。 */
     void clear();
+
+    /** @brief 清空指定矩形区域。 */
     void clearRegion(RegionArgs args);
+
+    /** @brief 用指定字符与样式填充矩形区域。 */
     void fillRegion(FillArgs args);
 
-    // ── 导入 ────────────────────────────────────────────────────────
-    // 从另一个 Framebuffer 拷贝单元格到本对象的 (off_col, off_row) 处。
-    // 目的地上的宽字符碎片会在覆盖前被清理。
-    // 源中越过目的地右边缘的宽字符，
-    // 会用源自身样式的一个空格替换。
+    //-- 导入
+
+    /**
+     * @brief 从另一个 Framebuffer 拷贝单元格到本对象的 (off_col, off_row) 处。
+     * @note 目的地上的宽字符碎片会在覆盖前被清理；源中越过目的地右边缘的
+     *       宽字符，会用源自身样式的一个空格替换。
+     * @param offset 拷贝到本对象的落点。
+     * @param src    源缓冲区。
+     */
     void importFrame(PositionArgs offset, const Framebuffer& src);
 
-    // ── 输出 ────────────────────────────────────────────────────────
+    //-- 输出
+
+    /** @brief 与上一帧比较差异并增量输出到终端。 */
     void swap();
 
   private:
@@ -282,32 +331,39 @@ class Framebuffer {
         return r;
     }
 
-    int                   max_col_ = 0;
-    int                   max_row_ = 0;
-    int                   off_col_ = 0;
-    int                   off_row_ = 0;
-    std::vector<Cell>     buf_;
-    bool                  dirty_   = false;
-    std::string           out_buf_;         // 可复用的 swap 输出缓冲
-    std::vector<std::string> sgr_pool_;     // SGR 去重池
+    int                      max_col_ = 0;
+    int                      max_row_ = 0;
+    int                      off_col_ = 0;
+    int                      off_row_ = 0;
+    std::vector<Cell>        buf_;
+    bool                     dirty_   = false;
+    std::string              out_buf_;   // 可复用的 swap 输出缓冲
+    std::vector<std::string> sgr_pool_;  // SGR 去重池
 };
 
-// ---- VaTui 单例 ------------------------------------------------------
+//- VaTui 单例
 
+/** @brief 全局单例：持有一个 Framebuffer 与一个终端实例。 */
 class VaTui {
   public:
+
+    /** @brief 取全局单例。 */
     static VaTui& instance();
 
     // 不可拷贝。
     VaTui(const VaTui&) = delete;
     VaTui& operator=(const VaTui&) = delete;
 
-    // ── 生命周期 ────────────────────────────────────────────────────
-    // 进入 raw 模式、隐藏光标、清屏。
-    // 可安全地多次调用（幂等）。
+    //-- 生命周期
+
+    /**
+     * @brief 进入 raw 模式、隐藏光标、清屏。可安全多次调用（幂等）。
+     */
     void init();
 
-    // ── Framebuffer 访问 ────────────────────────────────────────────
+    //-- Framebuffer 访问
+
+    /** @brief 取内部 Framebuffer。 */
     Framebuffer& buffer() { return fb_; }
 
   private:
