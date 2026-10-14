@@ -1,6 +1,6 @@
 # =========================================================================
 #  VAWK — 顶层构建（全自动发现，不含具体文件名）
-#    make        库 + 全部演示 + 头文件检查 + 测试
+#    make        库 + 全部演示 + 头文件检查（不含测试）
 #    make lib    lib/libvawk.a 与 lib/libvawk.so
 #    make demo   全部演示项目（单个失败跳过）
 #    make test   测试（单个失败跳过）
@@ -21,9 +21,8 @@ DEMO_PROJECTS := $(patsubst %/Makefile,%,$(shell find demo -mindepth 2 -maxdepth
 
 all: lib
 	@$(MAKE) --no-print-directory demo
-	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory check
-	@echo "== 全部完成 =="
+	@echo "== 全部完成（自动测试不在其中，请单独执行）=="
 
 lib: $(LIB_A) $(LIB_SO)
 

@@ -49,7 +49,7 @@ VAWK/
 ## 构建
 
 ```
-make          # 库 + 全部 demo + 头文件检查 + 测试
+make          # 库 + 全部 demo + 头文件检查（不含测试）
 make lib      # lib/libvawk.a 与 libvawk.so
 make demo     # 全部演示
 make test     # 测试
