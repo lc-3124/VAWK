@@ -19,6 +19,15 @@
 - 头卫兵：`UPPER_SNAKE_HPP`。
 - 枚举定义集中在 `vaterm/enums.hpp`。
 
+## 头与实现的分界
+
+一句话判据：**函数体含分支 / 循环 / 查表 / syscall → 头出声明、cpp 出定义；纯转发或纯字符串拼装 → 留在头里 inline。**
+
+- 头里只有声明，加上「1~3 行的纯转发」（例如 `fg(Rgb)` → `fg(r,g,b)`）。
+- `cursor.hpp` 整体是纯 `\033[..` 拼串，按判据保持 header-only。
+- 模板、宏、纯枚举**只能**留在头里（`vawk/core/event.hpp` 属此类）。
+- 头必须**显式**声明自己用到的依赖（不要依赖别的头顺带传递，例如 `term.hpp` 直接 `#include "vaterm/enums.hpp"`）。
+
 ## 注释
 
 - 统一用**中文**。

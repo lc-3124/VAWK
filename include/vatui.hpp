@@ -20,6 +20,8 @@
 // -----------------------------------------------------------------------
 
 #include <cstdint>
+#include <initializer_list>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -45,65 +47,46 @@ namespace vatui {
 //            C8:  经 rgb_to_256 降位转换
 //            C4:  经 nearest_4bit 降位转换
 
-inline std::string fg(vaterm::Color4 c) {
-    return vaterm::color::fg(c);
-}
+// ---- 颜色 SGR 辅助函数（立即转换） -------------------------------------
+// 每次调用都在首次使用时检测终端色深（此后缓存），
+// 并自动把输入转换为终端原生色深。
+// 在 Style 初始化器中使用：
+//   Style{.fg_sgr = fg(Color4::GREEN), .bg_sgr = bg(Color8{196})}
+//
+// 转换规则（fg 与 bg 相同）：
+//   Color4 → 直通（4-bit 在任何终端上都可用）
+//   Color8 → C24: 经 _256_to_rgb 升位转换
+//            C4:  经 _256_to_rgb + nearest_4bit 降位转换
+//            C8:  直通
+//   Rgb    → C24: 直通
+//            C8:  经 rgb_to_256 降位转换
+//            C4:  经 nearest_4bit 降位转换
+//
+// 实现见 src/vatui.cpp。
 
-inline std::string fg(vaterm::Color8 c) {
-    static auto depth = vaterm::terminal::detect_color_depth();
-    if (depth >= vaterm::ColorDepth::C24) {
-        auto rgb = vaterm::color::_256_to_rgb(c.index);
-        return vaterm::color::fg(rgb);
-    }
-    if (depth == vaterm::ColorDepth::C4) {
-        auto rgb = vaterm::color::_256_to_rgb(c.index);
-        return vaterm::color::fg(vaterm::color::nearest_4bit(rgb));
-    }
-    return vaterm::color::fg(c.index);
-}
+// 前景色（把输入转换为当前色深下的 SGR 序列）。
+std::string fg(vaterm::Color4 c);
+std::string fg(vaterm::Color8 c);
+std::string fg(vaterm::Rgb c);
+std::string fg(vaterm::Trans);
 
-inline std::string fg(vaterm::Rgb c) {
-    static auto depth = vaterm::terminal::detect_color_depth();
-    if (depth >= vaterm::ColorDepth::C24)
-        return vaterm::color::fg(c);
-    if (depth == vaterm::ColorDepth::C8)
-        return vaterm::color::fg(vaterm::color::rgb_to_256(c.r, c.g, c.b));
-    return vaterm::color::fg(vaterm::color::nearest_4bit(c));
-}
+// 背景色（同上）。
+std::string bg(vaterm::Color4 c);
+std::string bg(vaterm::Color8 c);
+std::string bg(vaterm::Rgb c);
+std::string bg(vaterm::Trans);
 
-inline std::string fg(vaterm::Trans) { return std::string{}; }
+// 把一组 SGR 效果合并成一条转义序列。
+std::string effects(std::initializer_list<vaterm::TextEffect> list);
 
-inline std::string bg(vaterm::Color4 c) {
-    return vaterm::color::bg(c);
-}
-
-inline std::string bg(vaterm::Color8 c) {
-    static auto depth = vaterm::terminal::detect_color_depth();
-    if (depth >= vaterm::ColorDepth::C24) {
-        auto rgb = vaterm::color::_256_to_rgb(c.index);
-        return vaterm::color::bg(rgb);
-    }
-    if (depth == vaterm::ColorDepth::C4) {
-        auto rgb = vaterm::color::_256_to_rgb(c.index);
-        return vaterm::color::bg(vaterm::color::nearest_4bit(rgb));
-    }
-    return vaterm::color::bg(c.index);
-}
-
-inline std::string bg(vaterm::Rgb c) {
-    static auto depth = vaterm::terminal::detect_color_depth();
-    if (depth >= vaterm::ColorDepth::C24)
-        return vaterm::color::bg(c);
-    if (depth == vaterm::ColorDepth::C8)
-        return vaterm::color::bg(vaterm::color::rgb_to_256(c.r, c.g, c.b));
-    return vaterm::color::bg(vaterm::color::nearest_4bit(c));
-}
-
-inline std::string bg(vaterm::Trans) { return std::string{}; }
-
-inline std::string effects(std::initializer_list<vaterm::TextEffect> list) {
-    return vaterm::color::effect(list);
-}
+// ---- 终端色深访问点 ----------------------------------------------------
+// 首次调用探测一次并缓存。set_color_depth() 可强制指定色深（测试 / 手动
+// 降级时用），传 std::nullopt 则恢复自动探测。
+//
+// 这是全库唯一持有色深状态的地方：原先每个 fg/bg 重载都自带一个函数内
+// static 缓存，彼此重复且无法在测试中注入。
+vaterm::ColorDepth color_depth();
+void set_color_depth(std::optional<vaterm::ColorDepth> depth);
 
 // ---- 样式描述符（预计算的 SGR 串） -------------------------------------
 // 每个颜色值在赋值时就会被转换成对应的 ANSI SGR 序列。

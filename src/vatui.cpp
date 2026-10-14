@@ -49,6 +49,39 @@ int cp_width(char32_t cp) {
     return 1;
 }
 
+// ── 颜色降位 ------------------------------------------------------------
+// 把 256 色 / 真彩色按目标色深折算成 SGR 序列。
+// ch 决定序列用于前景还是背景——fg() 与 bg() 唯一的差别就在这一步。
+enum class SGR_Channel { FG, BG };
+
+std::string sgr_indexed(vaterm::Color8 c, vaterm::ColorDepth depth, SGR_Channel ch) {
+    if (depth >= vaterm::ColorDepth::C24) {
+        auto rgb = vaterm::color::_256_to_rgb(c.index);
+        return ch == SGR_Channel::FG ? vaterm::color::fg(rgb) : vaterm::color::bg(rgb);
+    }
+    if (depth == vaterm::ColorDepth::C4) {
+        auto rgb = vaterm::color::_256_to_rgb(c.index);
+        auto c4  = vaterm::color::nearest_4bit(rgb.r, rgb.g, rgb.b);
+        return ch == SGR_Channel::FG ? vaterm::color::fg(c4) : vaterm::color::bg(c4);
+    }
+    return ch == SGR_Channel::FG ? vaterm::color::fg(c.index) : vaterm::color::bg(c.index);
+}
+
+std::string sgr_rgb(vaterm::Rgb c, vaterm::ColorDepth depth, SGR_Channel ch) {
+    if (depth >= vaterm::ColorDepth::C24) {
+        return ch == SGR_Channel::FG ? vaterm::color::fg(c) : vaterm::color::bg(c);
+    }
+    if (depth == vaterm::ColorDepth::C8) {
+        auto idx = vaterm::color::rgb_to_256(c.r, c.g, c.b);
+        return ch == SGR_Channel::FG ? vaterm::color::fg(idx) : vaterm::color::bg(idx);
+    }
+    auto c4 = vaterm::color::nearest_4bit(c.r, c.g, c.b);
+    return ch == SGR_Channel::FG ? vaterm::color::fg(c4) : vaterm::color::bg(c4);
+}
+
+// 终端色深状态：g_forced 优先；否则首次探测后缓存进 g_probed。
+std::optional<vaterm::ColorDepth> g_forced, g_probed;
+
 } // 匿名命名空间
 
 // =====================================================================
@@ -56,6 +89,48 @@ int cp_width(char32_t cp) {
 // =====================================================================
 
 namespace vatui {
+
+// 当前终端色深：被 set_color_depth() 强制指定时直接返回，
+// 否则首次调用探测一次并缓存。
+vaterm::ColorDepth color_depth() {
+    if (g_forced) return *g_forced;
+    if (!g_probed) g_probed = vaterm::terminal::detect_color_depth();
+    return *g_probed;
+}
+
+// 强制指定色深（测试 / 手动降级）；传 nullopt 恢复自动探测。
+void set_color_depth(std::optional<vaterm::ColorDepth> depth) {
+    g_forced = depth;
+    if (!depth) g_probed.reset();
+}
+
+std::string fg(vaterm::Color4 c) { return vaterm::color::fg(c); }
+
+std::string fg(vaterm::Color8 c) {
+    return sgr_indexed(c, color_depth(), SGR_Channel::FG);
+}
+
+std::string fg(vaterm::Rgb c) {
+    return sgr_rgb(c, color_depth(), SGR_Channel::FG);
+}
+
+std::string fg(vaterm::Trans) { return std::string{}; }
+
+std::string bg(vaterm::Color4 c) { return vaterm::color::bg(c); }
+
+std::string bg(vaterm::Color8 c) {
+    return sgr_indexed(c, color_depth(), SGR_Channel::BG);
+}
+
+std::string bg(vaterm::Rgb c) {
+    return sgr_rgb(c, color_depth(), SGR_Channel::BG);
+}
+
+std::string bg(vaterm::Trans) { return std::string{}; }
+
+std::string effects(std::initializer_list<vaterm::TextEffect> list) {
+    return vaterm::color::effect(list);
+}
 
 void Framebuffer::setSize(SizeArgs args) {
     max_col_ = args.col;
