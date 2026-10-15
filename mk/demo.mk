@@ -13,7 +13,10 @@ $(BIN): $(OBJS) $(ROOT)/lib/libvawk.a
 
 $(OUT)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXSTD) $(WARN) $(INCFLAGS) -c $< -o $@
+	$(CXX) $(CXXSTD) $(WARN) $(INCFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# 自动头依赖：改头后只重编真正 include 它的源，不波及无关 demo。
+-include $(OBJS:.o=.d)
 
 clean:
 	@rm -rf $(OUT)

@@ -1,67 +1,67 @@
 #ifndef VATERM_ENUMS_HPP
 #define VATERM_ENUMS_HPP
 
-//- vaterm::enums — 共享枚举与简单数据类型
-//
-// 提供整个 vaterm 库通用的类型定义。所有取值都对应标准的
-// ANSI / ECMA-48 参数。
-//
-// 前缀带 InputData:: / input:: 的枚举定义在这里集中管理，
-// 在 vaterm/input.hpp 内用 using 别名保留原来的书写方式。
+/**
+ * vaterm::enums — 共享枚举与简单数据类型
+ * 提供整个 vaterm 库通用的类型定义。所有取值都对应标准的
+ * ANSI / ECMA-48 参数。
+ * 前缀带 InputData:: / input:: 的枚举定义在这里集中管理，
+ * 在 vaterm/input.hpp 内用 using 别名保留原来的书写方式。
+ */
 
 #include <cstdint>
 
 namespace vaterm {
 
-//- 终端色深检测
-//  从低到高排序，便于比较枚举值：C4 < C8 < C24
+  //- 终端色深检测
+  //  从低到高排序，便于比较枚举值：C4 < C8 < C24
 
-/**
- * @brief 终端支持的颜色深度，取值本身即为位数（4 / 8 / 24）。
- */
-enum class ColorDepth : uint8_t {
+  /**
+   * @brief 终端支持的颜色深度，取值本身即为位数。
+   */
+  enum class ColorDepth : uint8_t {
     C4  = 4,
     C8  = 8,
     C24 = 24,
-};
+  };
 
-//- 光标方向
-//  供 cursor::move() 使用，指定光标移动的方向。
+  //- 光标方向
+  //  供 cursor::move() 使用，指定光标移动的方向。
 
-/**
- * @brief 光标移动方向。
- */
-enum class CursorDir : uint8_t {
+  /**
+   * @brief 光标移动方向。
+   */
+  enum class CursorDir : uint8_t {
     UP,
     DOWN,
     LEFT,
     RIGHT,
-};
+  };
 
-//- 光标形状 (DECSCUSR)
-//  VTxxx 光标样式码。xterm、kitty、foot 及大多数现代终端都支持。
-//  取值 1-6 对应 DECSCUSR 参数。
+  //- 光标形状 (DECSCUSR)
+  //  VTxxx 光标样式码。xterm、kitty、foot 及大多数现代终端都支持。
+  //  取值 1-6 对应 DECSCUSR 参数。
 
-/**
- * @brief 光标形状，取值对应 DECSCUSR 参数 1-6。
- */
-enum class CursorShape : uint8_t {
+  /**
+   * @brief 光标形状，取值对应 DECSCUSR 参数 1-6。
+   */
+  enum class CursorShape : uint8_t {
     BLINKING_BLOCK      = 1,
     STEADY_BLOCK        = 2,
     BLINKING_UNDERLINE  = 3,
     STEADY_UNDERLINE    = 4,
     BLINKING_BAR        = 5,
     STEADY_BAR          = 6,
-};
+  };
 
-//- ANSI 文本效果 (SGR 参数)
-//  Select Graphic Rendition 参数。并非所有终端都支持每种
-//  效果；尤其是 RAPID_BLINK 常被忽略。
+  //- ANSI 文本效果 (SGR 参数)
+  //  Select Graphic Rendition 参数。
+  //  lc3124(261015): 并非所有终端都支持每种效果；尤其是 RAPID_BLINK。
 
-/**
- * @brief SGR 文本效果，取值即 SGR 参数值。
- */
-enum class TextEffect : uint8_t {
+  /**
+   * @brief SGR 文本效果，取值即 SGR 参数值。
+   */
+  enum class TextEffect : uint8_t {
     RESET           = 0,
     BOLD            = 1,
     DIM             = 2,
@@ -72,16 +72,16 @@ enum class TextEffect : uint8_t {
     REVERSE         = 7,
     CONCEAL         = 8,
     STRIKETHROUGH   = 9,
-};
+  };
 
-//- 4-bit ANSI 调色板
-//  十六种标准终端颜色。取值 0-7 为"暗色"组；
-//  取值 8-15 为对应的高亮变体。
+  //- 4-bit ANSI 调色板
+  //  十六种标准终端颜色。取值 0-7 为"暗色"组；
+  //  取值 8-15 为对应的高亮变体。
 
-/**
- * @brief 4-bit ANSI 标准颜色。
- */
-enum class Color4 : uint8_t {
+  /**
+   * @brief 4-bit ANSI 标准颜色。
+   */
+  enum class Color4 : uint8_t {
     BLACK           = 0,
     RED             = 1,
     GREEN           = 2,
@@ -98,7 +98,7 @@ enum class Color4 : uint8_t {
     BRIGHT_MAGENTA  = 13,
     BRIGHT_CYAN     = 14,
     BRIGHT_WHITE    = 15,
-};
+  };
 
 //- RGB 三元组
 //  供 24-bit 真彩色接口与色彩空间转换辅助函数使用
@@ -191,7 +191,7 @@ enum class KeyCode : int {
 
 /**
  * @brief input 的模块工作状态。
- * @note lc3124(260923): 各取值含义：
+ * 各取值含义：
  *          ON   (1) —— 鼠标键盘启动，模块工作中；
  *          MOUSE_DISABLE (2) —— 鼠标没有启动，执行 enableMouse 返回这个值
  *                说明终端不兼容鼠标；

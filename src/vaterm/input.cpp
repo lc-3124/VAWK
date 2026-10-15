@@ -635,7 +635,7 @@ bool input::start() {
 bool input::stop() {
     std::lock_guard<std::mutex> lk(lifecycle_);
     running_ = false;          // 通知 reader_loop 退出
-    cv_.notify_all();          // 唤醒 waitInput / dump 的等待者
+    cv_waitInput.notify_all();          // 唤醒 waitInput / dump 的等待者
     if (reader_.joinable()) reader_.join();   // 等线程真正结束
     {
         std::lock_guard<std::mutex> lock(m_);
@@ -751,7 +751,7 @@ void input::reader_loop() {
         if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
             running_ = false;
             state_   = InputMode::INPUT_DISABLE;
-            cv_.notify_all();
+            cv_waitInput.notify_all();
             break;
         }
         if (got_any) {
@@ -759,7 +759,7 @@ void input::reader_loop() {
         } else if (++idle_ready > 3) {          // 连续多次“可读却空”，认定 EOF
             running_ = false;
             state_   = InputMode::INPUT_DISABLE;
-            cv_.notify_all();
+            cv_waitInput.notify_all();
             break;
         }
     }
@@ -786,7 +786,7 @@ void input::enqueue(std::deque<InputData>& produced) {
             buffer_.pop_front();
         produced.clear();
     }
-    if (pushed) cv_.notify_all();
+    if (pushed) cv_waitInput.notify_all();
 }
 
 // 判定数据包是否匹配想要的类型：type==NON 表示“不限类型”。
@@ -829,8 +829,8 @@ InputData input::waitInput(InputData::InputType type, int timeout_ms) {
     auto ready = [&] { return !running_ || newest_matches(); };
 
     if (timeout_ms < 0) {
-        cv_.wait(lock, ready);
-    } else if (!cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
+        cv_waitInput.wait(lock, ready);
+    } else if (!cv_waitInput.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
         return InputData{};                 // 超时 → NON
     }
     if (!running_ || !newest_matches()) return InputData{};   // 被 stop / 最新不是要的
@@ -877,8 +877,8 @@ InputData input::dumper::dump(int timeout_ms) {
     auto ready = [&] { return !in_->running_ || next_unread() != nullptr; };
     if (!ready()) {
         if (timeout_ms < 0) {  ///< 无时限：一直等到 ready() 为真（有未读事件，或引擎停止）
-            in_->cv_.wait(lock, ready);
-        } else if (!in_->cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
+            in_->cv_waitInput.wait(lock, ready);
+        } else if (!in_->cv_waitInput.wait_for(lock, std::chrono::milliseconds(timeout_ms), ready)) {
             return InputData{};        // 超时 → NON
         }
     }

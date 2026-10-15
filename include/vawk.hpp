@@ -42,7 +42,7 @@
 #include "vawk/core/event_upstream.hpp"
 #include "vawk/core/event_router.hpp"
 #include "vawk/core/input.hpp"
-#include "vawk/widget/widget.hpp"
+#include "vawk/core/widget.hpp"
 #include "vawk/widget/window.hpp"
 #include "vawk/widget/drawable.hpp"
 

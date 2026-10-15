@@ -8,9 +8,11 @@
  * 户层面不再使用系统的原生输入。使用状态机来解析输入，解析的结果填入缓冲队
  * 列，消费者从缓冲队列获取键盘和鼠标的输入事件。
  *
- * lc3124(261013): 测试和审查已经完成，定义与实现已经分离。本文件只保留声明，
- * 实现见 src/vaterm/input.cpp——这是 vaterm 里唯一非 header-only 的模块，
- * 使用它的程序需要链接该对象文件。
+ * lc3124(261013): 测试和审查大概完成了，定义与实现已经分离。
+ * 实现见 src/vaterm/input.cpp
+ * 这是 vaterm 里唯一非 header-only 的模块，使用它的程序需要链接该对象文件。
+ *
+ * lc3124(261015): 正在审核注释
  */
 
 // 标准库
@@ -56,10 +58,10 @@ struct InputData {
 
     // 定义在 vaterm/enums.hpp，这里保留别名，用法不变。
     // 用 ::vaterm:: 前缀是为了避免在这里解析到别名自身（自引用）。
-    using InputType   = ::vaterm::InputType;
-    using MouseButton = ::vaterm::MouseButton;
-    using MouseAction = ::vaterm::MouseAction;
-    using KeyCode     = ::vaterm::KeyCode;
+    using InputType   = ::vaterm::InputType;   ///< 输入类型，区分鼠标和键盘
+    using MouseButton = ::vaterm::MouseButton; ///< 鼠标按钮枚举
+    using MouseAction = ::vaterm::MouseAction; ///< 鼠标动作枚举
+    using KeyCode     = ::vaterm::KeyCode;     ///< 没有对于unicode码点的按键枚举
 
     //-- 鼠标负载
 
@@ -277,32 +279,32 @@ class input_fsm {
 
     /**
      * @brief 喂入一个字节，解析出的事件追加到 out。
-     * @note lc3124(260923): 同一字节可能在新状态下被重新处理，见各 step_* 的返回值。
      * @param b   输入字节。
      * @param out 事件输出队列。
+     * @note lc3124(260923): 同一字节可能在新状态下被重新处理，见各 step_* 的返回值。
      */
     void feed(unsigned char b, std::deque<InputData>& out);
 
     /**
      * @brief 喂入一段字节。
-     * @note lc3124(260923): 把许多字节分成一个一个字节发送给 feed 的单字节版本。
      * @param bytes 输入字节串。
      * @param out   事件输出队列。
+     * @note lc3124(260923): 把许多字节分成一个一个字节发送给 feed 的单字节版本。
      */
     void feed(std::string_view bytes, std::deque<InputData>& out);
 
     /**
      * @brief 是否有尚未完成的序列。
-     * @note lc3124(260923): 供调用方判断是否需要继续等后续字节。
      * @return true 表示停在半截序列（CSI / 鼠标 / UTF-8 / 孤立 ESC）。
+     * @note lc3124(260923): 供调用方判断是否需要继续等后续字节。
      */
     bool pending() const;
 
     /**
      * @brief 超时收尾：把孤立的 ESC 收敛成 Esc 键事件。
-     * @note lc3124(260923): 超时说明这玩意可能不是 escape 事件，而是一个单纯的输入，
      *        也有可能终端出现错误，导致没有完整传递输入动作；总之就是不要了。
      * @param out 事件输出队列。
+     * @note lc3124(260923): 超时说明这玩意可能不是 escape 事件，而是一个单纯的输入，
      */
     void flush_pending(std::deque<InputData>& out);
 
@@ -383,10 +385,10 @@ class input {
 
     /**
      * @brief 接管输入：开启鼠标追踪、启动后台解析线程。
-     * @note lc3124(260923): raw mode 需调用方预先开启；未处于 raw 模式时返回
-     *        false、不启动。这样设计是因为我的预想设计中，input 模块由再次封装，
-     *        raw 模式的切换已经在 vatui 的构造和析构种完成。
      * @return 成功返回 true。
+     * @note lc3124(260923): raw mode 需调用方预先开启；未处于 raw 模式时返回
+     *        false、不启动。这样设计是因为我的预想设计中，input 模块由vatui再次封装，
+     *        raw 模式的切换已经在 vatui 的构造和析构中完成。
      */
     bool start();
 
@@ -398,7 +400,6 @@ class input {
 
     /**
      * @brief 开启 / 关闭鼠标追踪。
-     * @note lc3124(260923): 开关会同步更新 getState()。
      * @return 成功返回 true（未 start 返回 false）。
      */
     bool enableMouse();
@@ -406,7 +407,6 @@ class input {
 
     /**
      * @brief 开启 / 关闭键盘事件。
-     * @note lc3124(260923): 关闭后键盘事件被丢弃，但仍会被解析。
      * @return 成功返回 true（未 start 返回 false）。
      */
     bool enableKeyBd();
@@ -414,10 +414,12 @@ class input {
 
     /**
      * @brief 查询当前工作状态。
-     * @note lc3124(260923): 线程安全，可随时调用。
      * @return InputMode，ON / OFF / MOUSE_DISABLE / KEYBD_DISABLE / INPUT_DISABLE。
      */
     InputMode getState() const;
+
+    //-- lc3124(261015) 这里是消费者调用的方法，我设计了三种方法，消费者可以通过
+    //-- get立刻获取最新消息，通过wait等待一次新的，用dump从最旧的未读事件开始取出。
 
     /**
      * @brief 非阻塞读取：从缓冲区历史里读最新的一条事件，不取走、不消费。
@@ -449,12 +451,12 @@ class input {
 
     /**
      * @brief 倾倒器：每个消费者各持一个，拥有自己的游标，从旧到新按序号顺序
-     *  消费共享缓冲区里的事件（不去重、不折叠），因此多个对象可各自读全量流。
+     *  消费共享缓冲区里的事件，因此多个对象可各自读全量流。
      *
      * @note lc3124(261012): 这个设计是为了解决一个麻烦：原始输入的处理和输入消息的
-     *        缓存是异步的，导致上面两个接口有可能因为原始输入过快而漏掉输入
+     *        缓存是异步的，导致上面get和wait两个接口有可能因为原始输入过快而漏掉输入
      *        （比如输入法一次性输入一大段句子），所以在希望获取一次准确的用户输入的
-     *        时候，使用倾倒器可以从队列的历史消息中跟进输入来保证输入的准确。
+     *        时候，使用倾倒器可以从队列的历史消息中从最旧的事件跟进输入来保证输入的准确。
      *        倾倒器的作用就是确保输入的东西不会遗漏，除非缓冲区耗尽。
      * @warning 缓冲区耗尽会导致倾倒器的游标被强制前移，导致数据丢失，
      *           可以设置宏来改变缓冲区大小。
@@ -494,6 +496,7 @@ class input {
 
         input*        in_;
         std::uint64_t cursor_     = 0; ///< 最后一条已倾倒事件的序号
+
         // lc3124(261012): 引擎世代设计是为了检测当前环形缓冲的游标是否失效，
         // 输入框架热重载的时候会重置缓冲区，这时候倾倒器的游标是错误的，
         // 输入框架会在每次重载的时候更新世代，倾倒器跟进这个世代就可以知道自己
@@ -522,7 +525,9 @@ class input {
     mutable std::mutex      m_;
     std::mutex              lifecycle_; ///< 串行化 start/stop
     bool                    started_ = false; ///< 是否已接管终端
-    std::condition_variable cv_; ///< 用于 waitInput 消费者
+
+    // TODO cv_过于笼统，应该改为cv_waitinput描述清楚是什么被cv管理
+    std::condition_variable cv_waitInput; ///< 用于 waitInput 消费者
     std::atomic<bool>       running_{false};
     std::atomic<bool>       mouse_enabled_{false};
     std::atomic<bool>       keybd_enabled_{true};

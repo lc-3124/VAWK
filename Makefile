@@ -22,11 +22,12 @@ DEMO_PROJECTS := $(patsubst %/Makefile,%,$(shell find demo -mindepth 2 -maxdepth
 all: lib
 	@$(MAKE) --no-print-directory demo
 	@$(MAKE) --no-print-directory check
-	@echo "== 全部完成（自动测试不在其中，请单独执行）=="
+	@echo "== 全部完成（自动测试请单独执行）=="
 
 lib: $(LIB_A) $(LIB_SO)
 
 demo:
+	@echo "== 构建演示程序开始 =="
 	@skip=0; for d in $(DEMO_PROJECTS); do \
 	  echo ">>> $$d"; \
 	  $(MAKE) --no-print-directory -C $$d ROOT=$(ROOT) || { echo "  !! 跳过（编译失败）：$$d"; skip=1; }; \
@@ -38,12 +39,14 @@ test:
 	@$(MAKE) --no-print-directory -C test ROOT=$(ROOT)
 
 check:
+	@echo "== 头文件检查开始=="
 	@for h in $(HDRS); do \
 	  $(CXX) $(CXXSTD) $(HARDWARN) $(INCFLAGS) -fsyntax-only -x c++-header $$h || { echo "  FAIL $$h"; exit 1; }; \
 	done
 	@echo "== 头文件检查通过（共 $(words $(HDRS)) 个）=="
 
 clean:
+	@echo "== 清理开始 =="
 	@rm -rf build lib
 	@for d in $(DEMO_PROJECTS); do $(MAKE) --no-print-directory -C $$d clean >/dev/null 2>&1 || true; done
 	@echo "== 已清理 build/ 与 lib/ =="

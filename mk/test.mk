@@ -2,6 +2,7 @@ TEST_SRCS := $(shell find $(ROOT)/test -name '*.cpp' 2>/dev/null)
 TEST_OUT  := $(ROOT)/build/test
 
 test:
+	@echo "== 自动测试程序构建开始 =="
 	@mkdir -p $(TEST_OUT)
 	@if [ -z "$(TEST_SRCS)" ]; then echo "  （test/ 下暂无用例）"; exit 0; fi; \
 	 skip=0; for s in $(TEST_SRCS); do \
