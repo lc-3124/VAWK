@@ -105,7 +105,7 @@ void EventUpstream::holder_release(std::shared_ptr<Entity> entity) {
     // 索引表一直强引用，永远回收不掉。
     unsubscribe_all(entity.get());
 
-    // 默认放手只删本地记录，不再回头动实体（避免重入）。
+    // 默认放手删掉本持有者名下的全部记录，不再回头动实体（避免重入）。
     Holder::holder_release(std::move(entity));
 }
 

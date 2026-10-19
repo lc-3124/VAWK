@@ -73,14 +73,22 @@ void Holder::release_by_ptr(const Entity* entity) {
 void Holder::holder_release(std::shared_ptr<Entity> entity) {
     if (!entity) return;
 
-    // 默认放手：只删本地记录。实体已在 request_release() 里清空小本子，
-    // 这里不能再调 remove_holder()，否则会重入。
-    std::lock_guard lk(mtx_held_);
-    auto it = std::find_if(held_.begin(), held_.end(),
-                           [&](const Held& h) { return h.entity == entity; });
-    if (it == held_.end()) return;
-    if (it != held_.end() - 1) *it = std::move(held_.back());
-    held_.pop_back();
+    // 默认放手：删掉该实体在本持有者名下的全部记录（一步到位）。实体已在
+    // request_release() 里清空小本子，这里不能再调 remove_holder()，否则会重入。
+    // 被移除的 shared_ptr 先收集，锁外析构，避免在锁内触发实体析构。
+    std::vector<std::shared_ptr<Entity>> doomed;
+    {
+        std::lock_guard lk(mtx_held_);
+        auto it = std::remove_if(held_.begin(), held_.end(), [&](const Held& h) {
+            if (h.entity == entity) {
+                doomed.push_back(h.entity);
+                return true;
+            }
+            return false;
+        });
+        held_.erase(it, held_.end());
+    }
+    // doomed 在此析构；若这是最后一份强引用，实体随之销毁。
 }
 
 }  // namespace vawk

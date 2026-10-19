@@ -155,6 +155,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     std::deque<std::shared_ptr<event::Base>> event_buffer_; ///< 事件队列
     std::thread                              worker_; ///< 工作线程
     std::uint64_t                            next_token_ = 0; ///< token 发号器
+    // 如果实体已经触发了释放，那么就不再允许上游再触发释放，否则可能造成释放循环。
     bool                                     releasing_  = false; ///< 是否已请求释放
     ReleasePolicy release_policy_; ///< 可选：运行期释放策略（空 = 用 is_orphan）
 };
