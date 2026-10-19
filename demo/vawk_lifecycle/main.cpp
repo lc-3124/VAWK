@@ -24,6 +24,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -47,10 +48,43 @@ namespace {
 
 std::mutex g_out_mtx;
 
+// 输出到管道/文件时关掉颜色，保证脚本拿到的仍是纯文本。
+static bool g_color = isatty(STDOUT_FILENO) != 0;
+
+enum class Color { None, Green, Yellow, Red, Cyan, Bold, Dim };
+
+// 取 SGR 参数；Color::None 不参与包装。
+const char* sgr(Color color) {
+    switch (color) {
+        case Color::Green: return "32";
+        case Color::Yellow: return "33";
+        case Color::Red: return "31";
+        case Color::Cyan: return "36";
+        case Color::Bold: return "1";
+        case Color::Dim: return "2";
+        case Color::None: break;
+    }
+    return "";
+}
+
+// 非 TTY 或 Color::None 时原样返回；否则整段包一层 SGR。
+std::string paint(const std::string& text, Color color) {
+    if (!g_color || color == Color::None) return text;
+    return std::string("\033[") + sgr(color) + "m" + text + "\033[0m";
+}
+
 // 全局串行化输出：多行内容拼成一个字符串，保证整段不被别的线程插队。
-void say(const std::string& text) {
+void say(const std::string& text, Color color = Color::None) {
     std::lock_guard<std::mutex> lk(g_out_mtx);
-    std::cout << text << std::endl;
+    std::cout << paint(text, color) << std::endl;
+}
+
+// 提示符只在标准输出是 TTY 时打印，避免污染管道输出。
+void print_prompt() {
+    if (!isatty(STDOUT_FILENO)) return;
+    std::lock_guard<std::mutex> lk(g_out_mtx);
+    std::cout << (g_color ? "\033[1;36m>> \033[0m" : ">> ");
+    std::cout.flush();
 }
 
 // 用逗号拼接；空列表返回 fallback。
@@ -126,7 +160,7 @@ class DemoEntity : public vawk::Entity {
         set_label(std::move(label));
     }
 
-    ~DemoEntity() override { say("entity released: " + label()); }
+    ~DemoEntity() override { say("entity released: " + label(), Color::Yellow); }
 
     // 未启用时只记账，enable() 里的 on_subscribe() 会统一订阅；
     // 已启用则立刻登记到 Router。
@@ -145,7 +179,7 @@ class DemoEntity : public vawk::Entity {
     }
 
     void on_event(std::shared_ptr<vawk::event::Base>) override {
-        say("processed event: " + label() + " !");
+        say("processed event: " + label() + " !", Color::Cyan);
     }
 
   private:
@@ -193,50 +227,57 @@ std::string entity_label(const std::shared_ptr<vawk::Entity>& entity) {
 
 //- 命令实现
 
+// 帮助行：命令名补齐到 25 字节，说明从第 27 列开始。
+std::string help_line(const std::string& name, const std::string& desc) {
+    std::string padded = name;
+    if (padded.size() < 25) padded.append(25 - padded.size(), ' ');
+    return "  " + paint(padded, Color::Cyan) + desc;
+}
+
 void cmd_help() {
     say(
-        "vawk lifecycle demo — 持有协议与生命周期\n"
-        "commands:\n"
-        "  help                     显示本帮助\n"
-        "  make ent <name>          创建实体（pending_ 强持有）\n"
-        "  enable <name>            启用实体并转入 live_（weak）\n"
-        "  listen <ent> <evt>       订阅事件 A/B/C/D；未 enable 则延后订阅\n"
-        "  status <ent>             显示实体的 label / holder / is_on\n"
-        "  status router            显示 A/B/C/D 各自的订阅者\n"
-        "  hold <ent> A [B ...]     以 System 身份持有实体\n"
-        "  disown <ent> A [B ...]   每个 holder 放手\n"
-        "  list entity              列出 live_ 中仍存活的实体\n"
-        "  list event               列出 A/B/C/D 及订阅数\n"
-        "  keep <ent> [A ...]       设置保活集合；不带名字恢复默认策略\n"
-        "  emit <evt>               推送事件 A/B/C/D\n"
-        "  quit | exit              退出");
+        std::string("vawk lifecycle demo — 持有协议与生命周期\n") +
+        "commands:\n" +
+        help_line("help", "显示本帮助\n") +
+        help_line("make ent <name>", "创建实体（pending_ 强持有）\n") +
+        help_line("enable <name>", "启用实体并转入 live_（weak）\n") +
+        help_line("listen <ent> <evt>", "订阅事件 A/B/C/D；未 enable 则延后订阅\n") +
+        help_line("status <ent>", "显示实体的 label / holder / is_on\n") +
+        help_line("status router", "显示 A/B/C/D 各自的订阅者\n") +
+        help_line("hold <ent> A [B ...]", "以 System 身份持有实体\n") +
+        help_line("disown <ent> A [B ...]", "每个 holder 放手\n") +
+        help_line("list entity", "列出 live_ 中仍存活的实体\n") +
+        help_line("list event", "列出 A/B/C/D 及订阅数\n") +
+        help_line("keep <ent> [A ...]", "设置保活集合；不带名字恢复默认策略\n") +
+        help_line("emit <evt>", "推送事件 A/B/C/D\n") +
+        help_line("quit | exit", "退出"));
 }
 
 void cmd_make(const std::vector<std::string>& args) {
     if (args.size() != 1) {
-        say("usage: make ent <name>");
+        say("usage: make ent <name>", Color::Red);
         return;
     }
     const std::string& name = args.front();
 
     auto l = g_live.find(name);
     if (l != g_live.end() && !l->second.expired()) {
-        say("entity already exists: " + name);
+        say("entity already exists: " + name, Color::Red);
         return;
     }
     if (g_pending.count(name) != 0) {
-        say("entity already exists: " + name);
+        say("entity already exists: " + name, Color::Red);
         return;
     }
 
     g_pending[name] = std::make_shared<DemoEntity>(g_router, name);
-    say("created: " + name);
+    say("created: " + name, Color::Green);
 }
 
 void cmd_enable(const std::string& name) {
     auto it = g_pending.find(name);
     if (it == g_pending.end()) {
-        say("no pending entity: " + name);
+        say("no pending entity: " + name, Color::Red);
         return;
     }
 
@@ -247,28 +288,29 @@ void cmd_enable(const std::string& name) {
     g_pending.erase(it);
     if (ok) g_live[name] = e;
 
-    say(ok ? "enabled: " + name : "enable failed: " + name);
+    say(ok ? "enabled: " + name : "enable failed: " + name,
+        ok ? Color::Green : Color::Red);
 }
 
 void cmd_listen(const std::string& ent, const std::string& evt) {
     auto e = find_entity(ent);
     if (!e) {
-        say("entity not found: " + ent);
+        say("entity not found: " + ent, Color::Red);
         return;
     }
     const EventDesc* d = find_event(evt);
     if (!d) {
-        say("unknown event: " + evt);
+        say("unknown event: " + evt, Color::Red);
         return;
     }
     e->listen(d->id);
-    say(ent + " listens " + d->name);
+    say(ent + " listens " + d->name, Color::Green);
 }
 
 void cmd_status_entity(const std::string& name) {
     auto e = find_entity(name);
     if (!e) {
-        say("entity not found: " + name);
+        say("entity not found: " + name, Color::Red);
         return;
     }
 
@@ -276,16 +318,16 @@ void cmd_status_entity(const std::string& name) {
     for (const auto& h : e->holder_snapshot()) holders.push_back(holder_name(h.owner));
 
     std::ostringstream os;
-    os << "Entity:\n"
-       << "  label : " << e->label() << "\n"
-       << "  holder : " << join(holders, ", ") << "\n"
-       << "  is_on : " << (e->enabled() ? "true" : "false");
+    os << paint("Entity:", Color::Bold) << "\n"
+       << paint("  label : ", Color::Dim) << e->label() << "\n"
+       << paint("  holder : ", Color::Dim) << join(holders, ", ") << "\n"
+       << paint("  is_on : ", Color::Dim) << (e->enabled() ? "true" : "false");
     say(os.str());
 }
 
 void cmd_status_router() {
     std::ostringstream os;
-    os << "Router:";
+    os << paint("Router:", Color::Bold);
     for (const auto& d : event_table()) {
         std::vector<std::string> labels;
         for (const auto& sub : g_router->subscribers(d.id)) labels.push_back(entity_label(sub));
@@ -297,44 +339,44 @@ void cmd_status_router() {
 void cmd_hold(const std::string& ent, const std::vector<std::string>& names) {
     auto e = find_entity(ent);
     if (!e) {
-        say("entity not found: " + ent);
+        say("entity not found: " + ent, Color::Red);
         return;
     }
     if (names.empty()) {
-        say("usage: hold <ent> A [B ...]");
+        say("usage: hold <ent> A [B ...]", Color::Red);
         return;
     }
 
     for (const auto& n : names) {
         auto* h = find_holder(n);
         if (!h) {
-            say("unknown holder: " + n);
+            say("unknown holder: " + n, Color::Red);
             continue;
         }
         h->hold(e);
-        say(ent + " held by " + n);
+        say(ent + " held by " + n, Color::Green);
     }
 }
 
 void cmd_disown(const std::string& ent, const std::vector<std::string>& names) {
     auto e = find_entity(ent);
     if (!e) {
-        say("entity not found: " + ent);
+        say("entity not found: " + ent, Color::Red);
         return;
     }
     if (names.empty()) {
-        say("usage: disown <ent> A [B ...]");
+        say("usage: disown <ent> A [B ...]", Color::Red);
         return;
     }
 
     for (const auto& n : names) {
         auto* h = find_holder(n);
         if (!h) {
-            say("unknown holder: " + n);
+            say("unknown holder: " + n, Color::Red);
             continue;
         }
         h->unhold(e);
-        say(ent + " disowned by " + n);
+        say(ent + " disowned by " + n, Color::Green);
     }
 }
 
@@ -354,14 +396,14 @@ void cmd_list_event() {
 void cmd_keep(const std::string& ent, const std::vector<std::string>& names) {
     auto e = find_entity(ent);
     if (!e) {
-        say("entity not found: " + ent);
+        say("entity not found: " + ent, Color::Red);
         return;
     }
 
     // 不带名字：传空 ReleasePolicy，恢复默认的 is_orphan() 判定。
     if (names.empty()) {
         e->set_release_policy({});
-        say("keep " + ent + ": default");
+        say("keep " + ent + ": default", Color::Green);
         return;
     }
 
@@ -370,7 +412,7 @@ void cmd_keep(const std::string& ent, const std::vector<std::string>& names) {
     for (const auto& n : names) {
         auto* h = find_holder(n);
         if (!h) {
-            say("unknown holder: " + n);
+            say("unknown holder: " + n, Color::Red);
             continue;
         }
         keepers.push_back(h);
@@ -385,13 +427,13 @@ void cmd_keep(const std::string& ent, const std::vector<std::string>& names) {
                 if (h.owner == k) return false;  // 有保活者 → 不释放
         return true;
     });
-    say("keep " + ent + ": " + join(accepted, ", "));
+    say("keep " + ent + ": " + join(accepted, ", "), Color::Green);
 }
 
 void cmd_emit(const std::string& evt) {
     auto event = make_event(evt);
     if (!event) {
-        say("unknown event: " + evt);
+        say("unknown event: " + evt, Color::Red);
         return;
     }
     g_router->push(std::move(event));
@@ -405,25 +447,25 @@ void dispatch(const std::string& cmd, const std::vector<std::string>& args) {
         cmd_help();
     } else if (cmd == "make") {
         if (args.empty() || args.front() != "ent") {
-            say("usage: make ent <name>");
+            say("usage: make ent <name>", Color::Red);
             return;
         }
         cmd_make({args.begin() + 1, args.end()});
     } else if (cmd == "enable") {
         if (args.size() != 1) {
-            say("usage: enable <name>");
+            say("usage: enable <name>", Color::Red);
             return;
         }
         cmd_enable(args.front());
     } else if (cmd == "listen") {
         if (args.size() != 2) {
-            say("usage: listen <ent> <evt>");
+            say("usage: listen <ent> <evt>", Color::Red);
             return;
         }
         cmd_listen(args[0], args[1]);
     } else if (cmd == "status") {
         if (args.size() != 1) {
-            say("usage: status <ent> | status router");
+            say("usage: status <ent> | status router", Color::Red);
             return;
         }
         if (args.front() == "router")
@@ -432,19 +474,19 @@ void dispatch(const std::string& cmd, const std::vector<std::string>& args) {
             cmd_status_entity(args.front());
     } else if (cmd == "hold") {
         if (args.size() < 2) {
-            say("usage: hold <ent> A [B ...]");
+            say("usage: hold <ent> A [B ...]", Color::Red);
             return;
         }
         cmd_hold(args.front(), {args.begin() + 1, args.end()});
     } else if (cmd == "disown") {
         if (args.size() < 2) {
-            say("usage: disown <ent> A [B ...]");
+            say("usage: disown <ent> A [B ...]", Color::Red);
             return;
         }
         cmd_disown(args.front(), {args.begin() + 1, args.end()});
     } else if (cmd == "list") {
         if (args.size() != 1 || (args.front() != "entity" && args.front() != "event")) {
-            say("usage: list entity | list event");
+            say("usage: list entity | list event", Color::Red);
             return;
         }
         if (args.front() == "entity")
@@ -453,18 +495,18 @@ void dispatch(const std::string& cmd, const std::vector<std::string>& args) {
             cmd_list_event();
     } else if (cmd == "keep") {
         if (args.empty()) {
-            say("usage: keep <ent> [A ...]");
+            say("usage: keep <ent> [A ...]", Color::Red);
             return;
         }
         cmd_keep(args.front(), {args.begin() + 1, args.end()});
     } else if (cmd == "emit") {
         if (args.size() != 1) {
-            say("usage: emit <evt>");
+            say("usage: emit <evt>", Color::Red);
             return;
         }
         cmd_emit(args.front());
     } else {
-        say("unknown command: " + cmd + "（输入 help 查看命令）");
+        say("unknown command: " + cmd + "（输入 help 查看命令）", Color::Red);
     }
 }
 
@@ -475,7 +517,10 @@ int main() {
     g_router->start_event_loop();
 
     std::string line;
-    while (std::getline(std::cin, line)) {
+    for (;;) {
+        print_prompt();
+        if (!std::getline(std::cin, line)) break;
+
         std::istringstream iss(line);
         std::string        cmd;
         if (!(iss >> cmd)) continue;
