@@ -12,7 +12,8 @@
 //
 //  持有协议见 holder.hpp：持有者用 acquire() 在实体的小本子上登记；
 //  每注销一笔、以及 enable() 成功后，实体检查自己是否成为孤儿，
-//  是则请求所有持有者放手。
+//  是则请求所有持有者放手。两本账由持有者侧的一把 scoped_lock 原子更新，
+//  实体只负责在锁内做孤儿判定。
 //
 //  唯一强引用由 detail::EntityStore 持有（用户通过 make_entity() 只拿到
 //  weak_ptr）；Holder 与 upstream 都只持 weak_ptr，不延长实体生命。
@@ -154,12 +155,6 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     friend class Holder;
     friend class detail::EntityStore;
 
-    // 在小本子上登记一笔持有；由 Holder::acquire() 调用。
-    std::uint64_t add_holder(HolderKind kind, Holder* owner);
-
-    // 注销指定 token；若已启用且因此成为孤儿，则请求释放。
-    void remove_holder(std::uint64_t token);
-
     // 自保（shared_from_this）→ 锁内取走全部持有者 → 锁外逐个请求放手。
     void request_disown();
 
@@ -170,9 +165,8 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     void thread_main();
 
     struct HolderEntry {
-        std::uint64_t token = 0; ///< 单调递增的登记号
-        HolderKind    kind  = HolderKind::System; ///< 持有者种类
-        Holder*       owner = nullptr; ///< 持有者（不保存强引用）
+        HolderKind kind  = HolderKind::System; ///< 持有者种类
+        Holder*    owner = nullptr; ///< 持有者（不保存强引用）
     };
 
     std::weak_ptr<EventUpstream> upstream_; ///< 事件源弱引用（防环）
@@ -189,7 +183,6 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     std::vector<HolderEntry>                 holders_; ///< 持有者小本子
     std::deque<std::shared_ptr<event::Base>> event_buffer_; ///< 事件队列
     std::thread                              worker_; ///< 工作线程
-    std::uint64_t                            next_token_ = 0; ///< token 发号器
     // 如果实体已经触发了释放，那么就不再允许上游再触发释放，否则可能造成释放循环。
     bool                                     releasing_  = false; ///< 是否已请求释放
     ReleasePolicy release_policy_; ///< 可选：运行期释放策略（空 = 用 is_orphan）

@@ -9,9 +9,13 @@
 //  本地记录只保存 weak_ptr：持有关系本身不延长实体生命。唯一强引用在
 //  detail::EntityStore 里，实体判定自己该走之后请它松手。
 //
+//  两本账（持有者的本地表 + 实体的小本子）由同一把 scoped_lock 双锁原子
+//  更新：不会出现“本地已删、实体未删”的中间态，也不需要约定加锁顺序
+//  （scoped_lock 内部用 try_lock 规避死锁）。
+//
 //  实体注销记录后若判定自己已成为孤儿（默认“没有任何 System 持有者”），
 //  会回调 on_disown() 请求持有者放手。默认实现丢掉本持有者名下关于该实体
-//  的全部记录，不会回头调用 Entity::remove_holder()，因此不会重入。
+//  的全部记录，不会回头动实体的小本子，因此不会重入。
 
 #include <cstdint>
 #include <memory>
@@ -46,24 +50,23 @@ class Holder {
      * @brief 实体请求持有者放手时调用。
      * @param entity 请求释放的实体。
      * @note  默认实现丢弃本持有者名下关于该实体的**全部**记录，**不**回头
-     *        调用 Entity::remove_holder()，避免重入。
+     *        动实体的小本子（那边已清空），避免重入。
      * @note  重写实现可以在此丢掉业务侧强引用，从而让实体自然销毁。
      */
     virtual void on_disown(std::shared_ptr<Entity> entity);
 
   protected:
     /**
-     * @brief 在实体小本子上登记一笔持有。
-     * @param entity 被持有的实体。
+     * @brief 在两本账上登记一笔持有：本地表 + 实体小本子。
+     * @param entity 被持有的实体；为空时什么都不做。
      * @param kind   持有者种类。
-     * @return 登记 token；同一持有者重复登记同一实体时返回既有 token，
-     *         实体为空返回 0。
      * @note  同一持有者对同一实体只保留一条记录（按实体去重）。
+     * @note  两本账在同一把 scoped_lock 下更新，外部看不到只更新一半的状态。
      */
-    std::uint64_t acquire(const std::shared_ptr<Entity>& entity, HolderKind kind);
+    void acquire(const std::shared_ptr<Entity>& entity, HolderKind kind);
 
     /**
-     * @brief 主动放手：先删本地记录，再让实体注销对应条目。
+     * @brief 主动放手：同一把双锁下删本地记录与实体条目。
      * @param entity 要放手的实体；未持有时什么都不做。
      */
     void disown(const std::shared_ptr<Entity>& entity);
@@ -75,11 +78,13 @@ class Holder {
     void disown(const Entity* entity);
 
   private:
-    // 本地持有记录；token 与实体小本子里的条目一一对应。
+    // 本地持有记录；与实体小本子里的条目一一对应（同一实体地址复用时会重建）。
     struct Held {
         std::weak_ptr<Entity> entity; ///< 不延长实体生命
-        std::uint64_t         token = 0;
     };
+
+    // 调用方必须已持有 mtx_held_ 与 entity->mtx_holders_。
+    void disown_locked_(Entity* entity, bool& orphan);
 
     std::mutex        mtx_held_;
     std::vector<Held> held_;

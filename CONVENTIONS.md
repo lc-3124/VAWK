@@ -45,8 +45,15 @@
 - 持有者继承 `Holder`；`acquire()` 在实体小本子上登记，`disown()` 主动放手，
   析构自动注销全部登记。`disown()` 有两个重载：传 `shared_ptr<Entity>` 按实体
   匹配，传 `const Entity*` 按裸指针匹配；两者都只维护持有记录，**不**销毁实体。
-- 实体小本子是一张 `{token, kind, owner}` 表，token 单调递增；注销按 token
-  线性查找 + swap-pop，持有者只有个位数，不引入哈希。
+- 持有关系不引入任何 token / 登记号：持有者本地表只存 `weak_ptr<Entity>`，
+  实体小本子只存 `{kind, owner}`，两边靠 `(owner, entity)` 互相定位。
+- **两本账由同一把双锁原子更新**：`std::scoped_lock lk(mtx_held_,
+  entity->mtx_holders_)`。登记与注销都在这一把双锁内完成，因此不存在“本地已
+  删、实体未删”的中间态；`scoped_lock` 内部用 `try_lock` 规避死锁，**不需要**
+  约定加锁顺序。注销时 `is_orphan()` 判定也在锁内完成，`request_disown()`
+  一律放到锁外调用（它会回调其他持有者）。
+- 持有者析构时先把本地表整体取走并清空，再逐个实体只锁 `mtx_holders_`
+  摘掉自己的条目；同样在锁外 `request_disown()`。
 - 每次注销一笔后，若实体已启用则调用 `is_orphan()` 判定；`enable()` 成功
   后也会在锁外主动判定一次。默认语义是"没有任何 `System` 持有者即孤儿"
   （`Router` / `Parent` / `Business` 都不算保活）。判定为孤儿就走
@@ -61,8 +68,8 @@
   `std::vector<HolderInfo>`（每条含 `kind` 与持有者实例 `owner`），返回 true
   表示可以释放；留空则用默认 `is_orphan()` 判定。策略在 `mtx_holders_` 内
   调用，不得反向加锁或回调实体。
-- `on_disown()` 默认只丢自己那条记录，**不得**回头调 `remove_holder()`，
-  否则重入。
+- `on_disown()` 默认只丢自己那条记录，**不得**回头动实体的小本子
+  （`request_disown()` 已清空），否则重入。
 - 实体两阶段：构造只存 `upstream` 的 `weak_ptr`（不入册、不起线程）；
   `enable()` 校验 `weak_from_this()` → `on_subscribe()` 订阅 → 失败回滚 →
   成功起线程；`shutdown()` 是**实体自我关停**（停线程 + 注销订阅），幂等，

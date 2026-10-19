@@ -2,7 +2,6 @@
 #include "vawk/core/entity_store.hpp"
 #include "vawk/core/event_upstream.hpp"
 
-#include <algorithm>
 #include <exception>
 #include <utility>
 
@@ -88,28 +87,6 @@ void Entity::shutdown_impl() {
 }
 
 //- 持有协议
-
-std::uint64_t Entity::add_holder(HolderKind kind, Holder* owner) {
-    std::lock_guard lk(mtx_holders_);
-    const auto token = ++next_token_;
-    holders_.push_back({token, kind, owner});
-    return token;
-}
-
-void Entity::remove_holder(std::uint64_t token) {
-    bool orphan = false;
-    {
-        std::lock_guard lk(mtx_holders_);
-        auto it = std::find_if(holders_.begin(), holders_.end(),
-                               [&](const HolderEntry& h) { return h.token == token; });
-        if (it == holders_.end()) return;
-        if (it != holders_.end() - 1) *it = holders_.back();
-        holders_.pop_back();
-        if (enabled_.load()) orphan = is_orphan();
-    }
-    // 判定与回调都在锁外收尾，持有者可以安全地反向操作实体。
-    if (orphan) request_disown();
-}
 
 bool Entity::is_orphan() const {
     // 调用方已持有 mtx_holders_
