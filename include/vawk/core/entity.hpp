@@ -3,106 +3,149 @@
 
 //- vawk::Entity — 接收事件的实体基类
 //
-//  Entity 提供：
-//    - 线程安全的事件缓冲（push_event / process_one_event）。
-//    - 便捷的订阅辅助（subscribe / unsubscribe）。
-//    - 一个可选的、便于人读的标签（set_label / label）。
+//  两阶段生命周期：
 //
-//  继承 Entity 并重写受保护的 on_event() 方法，即可处理传入的事件。
+//    构造         只记下 upstream 的 weak_ptr，不登记、不起线程。
+//    enable()     校验 weak_from_this() 有效 → on_subscribe() 订阅 →
+//                 失败则 up->detach(this) 回滚 → 成功则启动每实体线程。
+//    release()    幂等：置停止标志、唤醒、join、detach()。
 //
-//  订阅通过指向 EventUpstream 的裸指针完成（而非 shared_from_this），
-//  以避开原设计里的 std::bad_weak_ptr 陷阱。调用方必须保证 Entity
-//  比它所订阅的各个 upstream 活得更久。
+//  持有协议见 holder.hpp：持有者用 acquire() 在实体的小本子上登记；
+//  每注销一笔，实体检查自己是否成为孤儿，是则请求所有持有者放手。
+//
+//  实体必须由 std::shared_ptr 托管；upstream 只存 weak_ptr，避免
+//  “实体 ↔ 事件源”互相强引用形成环。
 
-#include "event.hpp"
+#include "vawk/core/event.hpp"
+#include "vawk/core/holder.hpp"
 
+#include <atomic>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
-#include <queue>
-#include <string>
+#include <thread>
 #include <vector>
+
+/** @brief 每个实体事件队列的容量；满时生产者阻塞。 */
+#ifndef VAWK_ENTITY_QUEUE_SIZE
+#define VAWK_ENTITY_QUEUE_SIZE 1024
+#endif
 
 namespace vawk {
 
-// 前向声明 —— 定义见 event_upstream.hpp。
+// 定义见 event_upstream.hpp。
 class EventUpstream;
 
 /**
- * @brief 接收事件的实体基类。
- * @note 订阅用裸指针指向 EventUpstream（避免 shared_from_this 的
- *       bad_weak_ptr）。调用方必须保证 Entity 比其 upstream 活得更久。
+ * @brief 接收事件的实体基类：每实体一条队列 + 一条工作线程。
+ * @note  必须由 std::shared_ptr 托管；enable() 与 release() 需按序调用。
+ * @warning 不要在 on_event() 回调里销毁自身。
  */
-class Entity {
+class Entity : public Holder, public std::enable_shared_from_this<Entity> {
   public:
-    Entity() = default;
-    Entity(const Entity&) = delete;
-    Entity& operator=(const Entity&) = delete;
-    virtual ~Entity();
+    /**
+     * @brief 构造：只保存 upstream 弱引用，不订阅、不起线程。
+     * @param upstream 事件源；实体不持有其强引用。
+     */
+    explicit Entity(std::shared_ptr<EventUpstream> upstream);
 
-    //-- 事件缓冲
+    /** @brief 析构：等价于 release()，确保工作线程退出并注销订阅。 */
+    ~Entity() override;
+
+    Entity(const Entity&)            = delete;
+    Entity& operator=(const Entity&) = delete;
 
     /**
-     * @brief 把事件推入线程安全的内部队列。
-     * @note 之后会通过 on_event() 投递该事件。
-     * @param evt 待投递的事件。
+     * @brief 启用实体：订阅事件并启动工作线程。
+     * @return 成功返回 true；upstream 已失效、对象不由 shared_ptr 托管
+     *         或 on_subscribe() 失败时返回 false。
+     * @note  失败时调用 upstream->detach(this) 回滚已登记的订阅。
+     */
+    bool enable();
+
+    /**
+     * @brief 停用并注销：幂等。
+     * @note  join 前会检测调用线程，工作线程内调用不会自我 join。
+     */
+    void release();
+
+    /** @brief 是否已启用。 */
+    bool enabled() const noexcept { return enabled_.load(); }
+
+    /**
+     * @brief 把事件放入本实体队列，由工作线程串行交给 on_event()。
+     * @param evt 待处理事件。
+     * @note  队列满时阻塞等待空位；实体已停用时直接丢弃。
      */
     void push_event(std::shared_ptr<event::Base> evt);
 
-    /** @brief process_one_event() 的结果码。 */
-    enum class ProcessResult { Processed, Discarded, Empty };
-
-    /**
-     * @brief 从内部队列取出并投递一个事件。
-     * @return Processed 已投递；Discarded 已丢弃；Empty 队列为空。
-     */
-    ProcessResult process_one_event();
-
-    //-- 订阅辅助
-
-    /**
-     * @brief 向某个 upstream 订阅一个或多个事件类型 ID。
-     * @param upstream  事件源。
-     * @param event_ids 订阅的事件类型 ID 列表。
-     */
-    void subscribe(EventUpstream* upstream, std::vector<size_t> event_ids);
-
-    /**
-     * @brief 取消订阅某个 upstream 上的指定事件类型 ID。
-     * @param upstream  事件源。
-     * @param event_ids 要注销的事件类型 ID 列表。
-     */
-    void unsubscribe(EventUpstream* upstream, std::vector<size_t> event_ids);
-
-    /**
-     * @brief 取消订阅给定 upstream 上的所有事件类型。
-     * @param upstream 事件源。
-     */
-    void unsubscribe(EventUpstream* upstream);
-
-    //-- 标签
-
-    /** @brief 取人读标签。 */
-    std::string label() const { return label_; }
-
-    /** @brief 设置人读标签。 */
-    void set_label(std::string l) { label_ = std::move(l); }
+    /** @brief 队列容量上限（编译期可用 VAWK_ENTITY_QUEUE_SIZE 覆盖）。 */
+    static constexpr std::size_t kMaxQueue = VAWK_ENTITY_QUEUE_SIZE;
 
   protected:
+    /**
+     * @brief 订阅事件；由 enable() 在工作线程启动前调用。
+     * @param up 事件源，保证非空。
+     * @return 成功返回 true；返回 false 表示 enable() 失败并回滚。
+     */
+    virtual bool on_subscribe(EventUpstream& up) = 0;
 
     /**
-     * @brief 处理推入缓冲的事件；子类重写此方法。
-     * @param evt 待处理的事件。
+     * @brief 处理一个事件；在本实体工作线程中调用，且不持任何内部锁。
+     * @param evt 待处理事件。
      */
     virtual void on_event(std::shared_ptr<event::Base> evt) = 0;
 
-    //-- 内部状态
+    /**
+     * @brief 孤儿判定：每注销一笔持有后调用一次。
+     * @return 默认实现：无持有者，或只剩 Router 时返回 true。
+     * @note  调用时持有 mtx_holders_，重写实现不要反向加锁。
+     */
+    virtual bool is_orphan() const;
 
-    std::mutex mutex_;
-    std::queue<std::shared_ptr<event::Base>> event_buffer_;
+  private:
+    friend class Holder;
 
-    // 本实体已订阅的 upstream 列表（用于批量取消订阅）。
-    std::vector<EventUpstream*> upstreams_;
-    std::string label_;
+    // 在小本子上登记一笔持有；由 Holder::acquire() 调用。
+    std::uint64_t add_holder(HolderKind kind, Holder* owner);
+
+    // 注销指定 token；若已启用且因此成为孤儿，则请求释放。
+    void remove_holder(std::uint64_t token);
+
+    // 自保（shared_from_this）→ 锁内取走全部持有者 → 锁外逐个请求放手。
+    void request_release();
+
+    // release() 的实际实现；析构与 release() 共用。
+    void release_impl();
+
+    // 工作线程主体：cv 等待队列非空或停止，锁外调用 on_event()。
+    void thread_main();
+
+    struct HolderEntry {
+        std::uint64_t token = 0; ///< 单调递增的登记号
+        HolderKind    kind  = HolderKind::System; ///< 持有者种类
+        Holder*       owner = nullptr; ///< 持有者（不保存强引用）
+    };
+
+    std::weak_ptr<EventUpstream> upstream_; ///< 事件源弱引用（防环）
+    std::atomic<bool>            enabled_{false}; ///< 是否已启用
+    std::atomic<bool>            running_{false}; ///< 工作线程是否继续
+
+    mutable std::mutex mtx_holders_; ///< 保护 holders_
+    std::mutex         mtx_eventbuffer_; ///< 保护 event_buffer_ 与 running_
+    std::mutex         mtx_lifecycle_; ///< 串行化 enable / release
+
+    std::condition_variable cv_eventbuffer_; ///< 队列非空或停止
+    std::condition_variable cv_space_; ///< 队列出现空位
+
+    std::vector<HolderEntry>                 holders_; ///< 持有者小本子
+    std::deque<std::shared_ptr<event::Base>> event_buffer_; ///< 事件队列
+    std::thread                              worker_; ///< 工作线程
+    std::uint64_t                            next_token_ = 0; ///< token 发号器
+    bool                                     releasing_  = false; ///< 是否已请求释放
 };
 
 }  // namespace vawk

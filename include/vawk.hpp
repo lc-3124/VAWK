@@ -10,7 +10,7 @@
 //    vawk::event::Base   <──  用户定义的事件结构体
 //         │                       (VAWK_EVENT_DEFINE 宏)
 //         │
-//         ├── Entity            ──  接收事件（重写 on_event）
+//         ├── Entity            ──  接收事件（重写 on_subscribe / on_event）
 //         │
 //         ├── EventUpstream     ──  事件源，向各实体路由事件
 //         │       │
@@ -18,25 +18,41 @@
 //         │
 //         └── Input (占位)        读取终端输入 → 事件
 //
+//    vawk::Holder        ──  持有者基类（acquire / release / holder_release）
+//         ├── Entity
+//         └── EventUpstream
+//
 //  典型用法：
 //    1. 用 VAWK_EVENT_DEFINE / VAWK_EVENT_DEFINE_END 定义事件类型。
 //    2. 创建 EventRouter 作为中心事件总线。
-//    3. 继承 Entity，重写 on_event()，并订阅需要的事件。
-//    4. 把事件 push 进 router；实体通过 dispatch 收到事件。
+//    3. 继承 Entity，重写 on_subscribe() 与 on_event()。
+//    4. 用 std::make_shared 托管实体，调用 enable() 订阅并起线程。
+//    5. 把事件 push 进 router；实体在自己的线程里收到事件。
 //
 //  示例：
 //    #include <vawk.hpp>
 //
 //    VAWK_EVENT_DEFINE(MyEvent) int value; VAWK_EVENT_DEFINE_END
+//        ↑ 宏体内已用 vawk:: 限定 event_type_id，事件类型可定义在任意作用域。
 //
 //    class MyEntity : public vawk::Entity {
-//      void on_event(std::shared_ptr<vawk::event::Base> evt) override {
-//          if (auto* e = vawk::event::cast<MyEvent>(*evt)) {
-//              printf("got value %d\n", e->value);
-//          }
-//      }
+//      public:
+//        using vawk::Entity::Entity;
+//
+//      protected:
+//        bool on_subscribe(vawk::EventUpstream& up) override {
+//            up.subscribe(vawk::event_type_id<MyEvent>(), shared_from_this());
+//            return true;
+//        }
+//
+//        void on_event(std::shared_ptr<vawk::event::Base> evt) override {
+//            if (auto* e = vawk::event::cast<MyEvent>(*evt)) {
+//                printf("got value %d\n", e->value);
+//            }
+//        }
 //    };
 
+#include "vawk/core/holder.hpp"
 #include "vawk/core/event.hpp"
 #include "vawk/core/entity.hpp"
 #include "vawk/core/event_upstream.hpp"

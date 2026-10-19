@@ -43,9 +43,9 @@ size_t event_type_id() {
 //- 定义事件类型的宏
 
 /** @brief 向继承自 vawk::event::Base 的结构体注入必需的 id() 重写。 */
-#define VAWK_EVENT_BASE_METHOD(T)      \
-    size_t id() const override {       \
-        return event_type_id<T>();     \
+#define VAWK_EVENT_BASE_METHOD(T)          \
+    size_t id() const override {           \
+        return vawk::event_type_id<T>();   \
     }
 
 /**
