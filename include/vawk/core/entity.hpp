@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -68,7 +69,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
 
     /**
      * @brief 停用并注销：幂等。
-     * @note  join 前会检测调用线程，工作线程内调用不会自我 join。
+     * @warning 若在工作线程（on_event()）内销毁自身，将直接 std::terminate。
      */
     void release();
 
@@ -84,6 +85,15 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
 
     /** @brief 队列容量上限（编译期可用 VAWK_ENTITY_QUEUE_SIZE 覆盖）。 */
     static constexpr std::size_t kMaxQueue = VAWK_ENTITY_QUEUE_SIZE;
+
+    /// 运行期释放策略：参数是当前持有者身份列表，返回 true 表示可以释放。
+    using ReleasePolicy = std::function<bool(const std::vector<HolderKind>&)>;
+
+    /**
+     * @brief 设置释放策略；传空函数则恢复默认的 `is_orphan()` 判定。
+     * @note 建议在 enable() 之前设置；与判定过程共用 mtx_holders_ 互斥。
+     */
+    void set_release_policy(ReleasePolicy policy);
 
   protected:
     /**
@@ -146,6 +156,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     std::thread                              worker_; ///< 工作线程
     std::uint64_t                            next_token_ = 0; ///< token 发号器
     bool                                     releasing_  = false; ///< 是否已请求释放
+    ReleasePolicy release_policy_; ///< 可选：运行期释放策略（空 = 用 is_orphan）
 };
 
 }  // namespace vawk

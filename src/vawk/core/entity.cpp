@@ -2,6 +2,7 @@
 #include "vawk/core/event_upstream.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <utility>
 
 namespace vawk {
@@ -58,10 +59,10 @@ void Entity::release_impl() {
     cv_space_.notify_all();
 
     if (worker_.joinable()) {
+        // 在自己线程里销毁自身会导致 join 自己/随后 UAF，快速失败而不是静默 UB。
         if (worker_.get_id() == std::this_thread::get_id())
-            worker_.detach();  // 工作线程内调用：不能自我 join
-        else
-            worker_.join();
+            std::terminate();
+        worker_.join();
     }
 
     // 注销订阅并释放 Router 的持有记录；此时 enabled_ 已为 false，不会再触发
@@ -95,9 +96,20 @@ void Entity::remove_holder(std::uint64_t token) {
 
 bool Entity::is_orphan() const {
     // 调用方持有 mtx_holders_。
+    if (release_policy_) {
+        std::vector<HolderKind> kinds;
+        kinds.reserve(holders_.size());
+        for (const auto& h : holders_) kinds.push_back(h.kind);
+        return release_policy_(kinds);
+    }
     if (holders_.empty()) return true;
     if (holders_.size() != 1) return false;
     return holders_.front().kind == HolderKind::Router;
+}
+
+void Entity::set_release_policy(ReleasePolicy policy) {
+    std::lock_guard lk(mtx_holders_);
+    release_policy_ = std::move(policy);
 }
 
 void Entity::request_release() {
@@ -117,6 +129,12 @@ void Entity::request_release() {
     // 锁外逐个请求放手；默认实现只删自己的记录，不会回头重入本函数。
     for (auto* h : targets)
         if (h) h->holder_release(self);
+
+    // 允许后续持有变化再次触发；本次若已真正析构则不会再执行到这里。
+    {
+        std::lock_guard lk(mtx_holders_);
+        releasing_ = false;
+    }
 }
 
 //- 事件队列 / 工作线程

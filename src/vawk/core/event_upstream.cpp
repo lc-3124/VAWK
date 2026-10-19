@@ -34,41 +34,49 @@ void EventUpstream::subscribe(std::size_t event_id, std::shared_ptr<Entity> enti
 }
 
 void EventUpstream::unsubscribe(std::size_t event_id, const Entity* entity) {
-    std::lock_guard lk(mtx_listeners_);
+    bool drop_hold = false;
+    {
+        std::lock_guard lk(mtx_listeners_);
 
-    auto eit = entity_events_.find(entity);
-    if (eit == entity_events_.end()) return;
-    if (event_id >= listeners_.size()) return;
-    auto& subs = eit->second;
+        auto eit = entity_events_.find(entity);
+        if (eit == entity_events_.end()) return;
+        if (event_id >= listeners_.size()) return;
+        auto& subs = eit->second;
 
-    // 先在自己的订阅表里定位要删的条目。
-    std::size_t sub_slot = subs.size();
-    for (std::size_t i = 0; i < subs.size(); ++i)
-        if (subs[i].event_id == event_id) {
-            sub_slot = i;
-            break;
+        // 先在自己的订阅表里定位要删的条目。
+        std::size_t sub_slot = subs.size();
+        for (std::size_t i = 0; i < subs.size(); ++i)
+            if (subs[i].event_id == event_id) {
+                sub_slot = i;
+                break;
+            }
+        if (sub_slot == subs.size()) return;
+
+        // 两张表各自 swap-pop，并修正被移动者的反向槽位。
+        const std::size_t list_slot = subs[sub_slot].list_slot;
+        auto&             list      = listeners_[event_id];
+
+        if (list_slot + 1 < list.size()) {
+            Listener moved = list.back();
+            list[list_slot] = moved;
+            entity_events_[moved.entity.get()][moved.sub_slot].list_slot = list_slot;
         }
-    if (sub_slot == subs.size()) return;
+        list.pop_back();
 
-    // 两张表各自 swap-pop，并修正被移动者的反向槽位。
-    const std::size_t list_slot = subs[sub_slot].list_slot;
-    auto&             list      = listeners_[event_id];
+        if (sub_slot + 1 < subs.size()) {
+            Subscription moved = subs.back();
+            subs[sub_slot] = moved;
+            listeners_[moved.event_id][moved.list_slot].sub_slot = sub_slot;
+        }
+        subs.pop_back();
 
-    if (list_slot + 1 < list.size()) {
-        Listener moved = list.back();
-        list[list_slot] = moved;
-        entity_events_[moved.entity.get()][moved.sub_slot].list_slot = list_slot;
+        if (subs.empty()) {
+            entity_events_.erase(eit);
+            drop_hold = true;  // 该实体已无任何订阅，Router 不再需要持有它
+        }
     }
-    list.pop_back();
-
-    if (sub_slot + 1 < subs.size()) {
-        Subscription moved = subs.back();
-        subs[sub_slot] = moved;
-        listeners_[moved.event_id][moved.list_slot].sub_slot = sub_slot;
-    }
-    subs.pop_back();
-
-    if (subs.empty()) entity_events_.erase(eit);
+    // 锁外释放：release_by_ptr 会通知实体注销，可能触发实体释放流程。
+    if (drop_hold) release_by_ptr(entity);
 }
 
 void EventUpstream::unsubscribe_all(const Entity* entity) {

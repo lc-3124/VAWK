@@ -39,6 +39,13 @@
 - 每次注销一笔后，若实体已启用则调用 `is_orphan()` 判定；默认语义是
   "只剩 Router（订阅关系）即孤儿"。判定为孤儿就走 `request_release()`：
   自保 → 锁内取走全部 owner 并清空小本子 → 锁外逐个调 `holder_release()`。
+  `request_release()` 收尾会复位内部的 `releasing_` 标志，因此持有者若没有
+  真正放手，后续持有变化仍可再次触发释放。
+- 取消最后一个订阅会自动释放 Router 持有（`subscribe` 与 `unsubscribe` 对称）；
+  `unsubscribe()` 只把"该实体已无任何订阅"记为待放手，锁外再调
+  `release_by_ptr()`，避免在索引锁内回调实体。
+- 释放条件可用 `set_release_policy()` 运行期配置，留空则用默认 `is_orphan()`
+  判定；策略在 `mtx_holders_` 内调用，不得反向加锁或回调实体。
 - `holder_release()` 默认只丢自己那条记录，**不得**回头调 `remove_holder()`，
   否则重入。
 - 实体两阶段：构造只存 `upstream` 的 `weak_ptr`（不入册、不起线程）；
@@ -46,8 +53,9 @@
   成功起线程；`release()` 幂等，置标志、唤醒、join、`detach()`。
 - 实体必须由 `shared_ptr` 托管（`shared_from_this()` 是自保与订阅的前提）；
   子实体对父实体只持弱引用。
-- 回调（`on_event` / `holder_release`）中不得销毁自身；队列满时生产者阻塞，
-  容量由 `VAWK_ENTITY_QUEUE_SIZE` 控制。
+- 回调（`on_event` / `holder_release`）中不得销毁自身；在 `on_event()` 所在的
+  工作线程里析构实体会直接 `std::terminate`（避免 join 自身与随后的 UAF）。
+  队列满时生产者阻塞，容量由 `VAWK_ENTITY_QUEUE_SIZE` 控制。
 
 ## 注释
 
