@@ -6,6 +6,9 @@
 //  持有者（业务对象、EventUpstream 等）用 acquire() 在实体的“小本子”上
 //  登记一条持有记录，用 disown() 主动放手；析构时自动注销全部登记。
 //
+//  本地记录只保存 weak_ptr：持有关系本身不延长实体生命。唯一强引用在
+//  detail::EntityStore 里，实体判定自己该走之后请它松手。
+//
 //  实体注销记录后若判定自己已成为孤儿（默认“没有任何 System 持有者”），
 //  会回调 on_disown() 请求持有者放手。默认实现丢掉本持有者名下关于该实体
 //  的全部记录，不会回头调用 Entity::remove_holder()，因此不会重入。
@@ -29,8 +32,8 @@ enum class HolderKind : std::uint8_t {
 
 /**
  * @brief 实体持有者基类：登记 / 放手 / 析构自动注销。
- * @note  acquire() 与 disown() 只维护持有记录；真正的销毁由持有者自己
- *        丢掉 shared_ptr 完成。
+ * @note  acquire() 与 disown() 只维护持有记录，且只保存 weak_ptr；
+ *        真正的销毁由 detail::EntityStore 丢掉最后一份强引用完成。
  */
 class Holder {
   public:
@@ -74,8 +77,8 @@ class Holder {
   private:
     // 本地持有记录；token 与实体小本子里的条目一一对应。
     struct Held {
-        std::shared_ptr<Entity> entity;
-        std::uint64_t           token = 0;
+        std::weak_ptr<Entity> entity; ///< 不延长实体生命
+        std::uint64_t         token = 0;
     };
 
     std::mutex        mtx_held_;

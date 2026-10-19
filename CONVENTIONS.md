@@ -32,6 +32,16 @@
 
 `vawk::Holder` 定义"谁在持有实体、何时可以放弃"的统一协议：
 
+- **唯一强引用**由内部 `detail::EntityStore` 持有：它只保存、不查找、不做
+  生命周期决策。用户通过 `vawk::make_entity<T>(args...)` 创建实体，只拿到
+  `weak_ptr<T>`。
+- 所有 Holder（含 `EventUpstream` 的 `listeners_`）的持有记录都只保存
+  `weak_ptr`，**不延长实体生命**。业务使用前必须 `lock()`，失败即表示实体
+  已释放；业务不保活，保活只由创建时声明的依赖（`Holder` / `System` /
+  `keep` 策略）决定。
+- 实体判定自己该走之后，`request_disown()` 通知完所有持有者，再请存储区
+  丢掉最后一份强引用，由 `shared_ptr` 正常析构（锁外析构，允许实体析构时
+  回调 upstream）。
 - 持有者继承 `Holder`；`acquire()` 在实体小本子上登记，`disown()` 主动放手，
   析构自动注销全部登记。`disown()` 有两个重载：传 `shared_ptr<Entity>` 按实体
   匹配，传 `const Entity*` 按裸指针匹配；两者都只维护持有记录，**不**销毁实体。
@@ -57,8 +67,8 @@
   `enable()` 校验 `weak_from_this()` → `on_subscribe()` 订阅 → 失败回滚 →
   成功起线程；`shutdown()` 是**实体自我关停**（停线程 + 注销订阅），幂等，
   置标志、唤醒、join、`detach()`。它不替持有者放手，也不等同于 `disown()`。
-- 实体必须由 `shared_ptr` 托管（`shared_from_this()` 是自保与订阅的前提）；
-  子实体对父实体只持弱引用。
+- 实体必须由 `shared_ptr` 托管（`shared_from_this()` 是自保与订阅的前提），
+  通常由 `make_entity()` 把强引用交给存储区；子实体对父实体只持弱引用。
 - 回调（`on_event` / `on_disown`）中不得销毁自身；在 `on_event()` 所在的
   工作线程里析构实体会直接 `std::terminate`（避免 join 自身与随后的 UAF）。
   队列满时生产者阻塞，容量由 `VAWK_ENTITY_QUEUE_SIZE` 控制。

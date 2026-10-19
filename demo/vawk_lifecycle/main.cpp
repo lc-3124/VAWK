@@ -3,7 +3,7 @@
 //  用 3 个固定的 System 持有者（A / B / C）、1 个常驻 EventRouter 和
 //  4 个事件类型，把下面几条路径都跑一遍：
 //
-//    - make ent / enable：强持有（pending_）→ 弱持有（live_）的两阶段表
+//    - make ent / enable：创建后由内部 EntityStore 保活，表里只存弱引用
 //    - listen：订阅即持有（Router 以 HolderKind::Router 登记）
 //    - hold / disown：System 持有者决定实体是否算孤儿
 //    - keep：用 set_release_policy() 覆盖默认的孤儿判定
@@ -13,6 +13,7 @@
 //
 //  所有输出共用一个全局互斥，事件线程与命令线程不会互相打断。
 
+#include <vawk/core/entity_store.hpp>
 #include <vawk/core/event_router.hpp>
 
 #include <chrono>
@@ -189,20 +190,17 @@ class DemoEntity : public vawk::Entity {
 
 //- 全局状态
 
-std::shared_ptr<vawk::EventRouter>      g_router;
-std::map<std::string, std::shared_ptr<DemoEntity>> g_pending; ///< enable 前：强持有
-std::map<std::string, std::weak_ptr<DemoEntity>>   g_live;    ///< enable 后：弱持有
+std::shared_ptr<vawk::EventRouter> g_router;
+std::map<std::string, std::weak_ptr<DemoEntity>> g_live; ///< 弱引用：唯一强引用在 EntityStore
 NamedHolder g_a{"A"};
 NamedHolder g_b{"B"};
 NamedHolder g_c{"C"};
 
-// 按名字取实体：先找强持有表，再提升弱持有表。
+// 按名字取实体：失败即表示条目不存在或实体已被存储区释放。
 std::shared_ptr<DemoEntity> find_entity(const std::string& name) {
-    auto p = g_pending.find(name);
-    if (p != g_pending.end()) return p->second;
-    auto l = g_live.find(name);
-    if (l != g_live.end()) return l->second.lock();
-    return nullptr;
+    auto it = g_live.find(name);
+    if (it == g_live.end()) return nullptr;
+    return it->second.lock();
 }
 
 NamedHolder* find_holder(const std::string& name) {
@@ -239,8 +237,8 @@ void cmd_help() {
         std::string("vawk lifecycle demo — 持有协议与生命周期\n") +
         "commands:\n" +
         help_line("help", "显示本帮助\n") +
-        help_line("make ent <name>", "创建实体（pending_ 强持有）\n") +
-        help_line("enable <name>", "启用实体并转入 live_（weak）\n") +
+        help_line("make ent <name>", "创建实体（唯一强引用在 EntityStore）\n") +
+        help_line("enable <name>", "启用实体；无 System 持有者时自行释放\n") +
         help_line("listen <ent> <evt>", "订阅事件 A/B/C/D；未 enable 则延后订阅\n") +
         help_line("status <ent>", "显示实体的 label / holder / is_on\n") +
         help_line("status router", "显示 A/B/C/D 各自的订阅者\n") +
@@ -265,29 +263,28 @@ void cmd_make(const std::vector<std::string>& args) {
         say("entity already exists: " + name, Color::Red);
         return;
     }
-    if (g_pending.count(name) != 0) {
-        say("entity already exists: " + name, Color::Red);
-        return;
-    }
 
-    g_pending[name] = std::make_shared<DemoEntity>(g_router, name);
+    // 唯一强引用交给内部存储区，这里只留弱引用。
+    g_live[name] = vawk::make_entity<DemoEntity>(g_router, name);
     say("created: " + name, Color::Green);
 }
 
 void cmd_enable(const std::string& name) {
-    auto it = g_pending.find(name);
-    if (it == g_pending.end()) {
-        say("no pending entity: " + name, Color::Red);
+    auto it = g_live.find(name);
+    if (it == g_live.end()) {
+        say("entity not found: " + name, Color::Red);
         return;
     }
 
-    // 顺序很关键：先 enable()，再移表，最后让局部 shared_ptr 离开作用域。
-    // 若实体在 enable() 时被判孤儿，析构会发生在命令返回处，打印可见。
-    auto       e  = it->second;
-    const bool ok = e->enable();
-    g_pending.erase(it);
-    if (ok) g_live[name] = e;
+    auto       e  = it->second.lock();
+    if (!e) {
+        say("entity not found: " + name, Color::Red);
+        return;
+    }
 
+    // 不额外持有：enable() 判为孤儿时会请存储区松手，
+    // 局部 shared_ptr 离开作用域后实体即在弱引用上过期。
+    const bool ok = e->enable();
     say(ok ? "enabled: " + name : "enable failed: " + name,
         ok ? Color::Green : Color::Red);
 }
@@ -383,8 +380,10 @@ void cmd_disown(const std::string& ent, const std::vector<std::string>& names) {
 void cmd_list_entity() {
     for (const auto& entry : g_live) {
         auto e = entry.second.lock();
-        if (!e) continue;  // expired：已经释放，跳过
-        say("entity " + e->label() + (e->enabled() ? " (is_on=true)" : " (released)"));
+        if (e)
+            say("entity " + entry.first + (e->enabled() ? " (is_on=true)" : " (is_on=false)"));
+        else
+            say("entity " + entry.first + " (released)");
     }
 }
 
@@ -534,7 +533,6 @@ int main() {
 
     // 先停 Router 线程，避免收尾阶段还有事件在派发。
     g_router->stop_event_loop();
-    g_pending.clear();
     g_live.clear();
     return 0;
 }

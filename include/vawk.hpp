@@ -26,8 +26,12 @@
 //    1. 用 VAWK_EVENT_DEFINE / VAWK_EVENT_DEFINE_END 定义事件类型。
 //    2. 创建 EventRouter 作为中心事件总线。
 //    3. 继承 Entity，重写 on_subscribe() 与 on_event()。
-//    4. 用 std::make_shared 托管实体，调用 enable() 订阅并起线程。
+//    4. 用 vawk::make_entity<T>() 创建实体（只拿到 weak_ptr），
+//       调用 enable() 订阅并起线程。
 //    5. 把事件 push 进 router；实体在自己的线程里收到事件。
+//
+//  唯一强引用由内部 detail::EntityStore 持有；Holder 与 upstream 都只持
+//  弱引用，实体判定自己该走之后由存储区松手销毁。
 //
 //  示例：
 //    #include <vawk.hpp>
@@ -55,6 +59,7 @@
 #include "vawk/core/holder.hpp"
 #include "vawk/core/event.hpp"
 #include "vawk/core/entity.hpp"
+#include "vawk/core/entity_store.hpp"
 #include "vawk/core/event_upstream.hpp"
 #include "vawk/core/event_router.hpp"
 #include "vawk/core/input.hpp"

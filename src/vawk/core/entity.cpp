@@ -1,4 +1,5 @@
 #include "vawk/core/entity.hpp"
+#include "vawk/core/entity_store.hpp"
 #include "vawk/core/event_upstream.hpp"
 
 #include <algorithm>
@@ -164,6 +165,15 @@ void Entity::request_disown() {
         std::lock_guard lk(mtx_holders_);
         releasing_ = false;
     }
+
+    // 实体已决定退出：先停线程并注销订阅。必须在存储区松手之前完成——
+    // 最后一份强引用可能挂在 Router 的派发快照上，若直接放手，析构会发生在
+    // 派发线程，与工作线程仍可能执行的虚调用 on_event() 竞争（vptr 改写）。
+    shutdown_impl();
+
+    // 请存储区丢掉最后一份强引用。self 仍按值持有本对象，因此 release()
+    // 之后到函数返回之前始终安全。
+    detail::EntityStore::instance().release(this);
 }
 
 //- 事件队列 / 工作线程

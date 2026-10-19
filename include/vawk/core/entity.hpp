@@ -14,8 +14,10 @@
 //  每注销一笔、以及 enable() 成功后，实体检查自己是否成为孤儿，
 //  是则请求所有持有者放手。
 //
-//  实体必须由 std::shared_ptr 托管；upstream 只存 weak_ptr，避免
-//  “实体 ↔ 事件源”互相强引用形成环。
+//  唯一强引用由 detail::EntityStore 持有（用户通过 make_entity() 只拿到
+//  weak_ptr）；Holder 与 upstream 都只持 weak_ptr，不延长实体生命。
+//  孤儿判定成立后 request_disown() 通知完持有者，再请存储区丢掉最后一份
+//  强引用，由 shared_ptr 正常析构。
 
 #include "vawk/core/event.hpp"
 #include "vawk/core/holder.hpp"
@@ -26,6 +28,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -43,6 +46,11 @@ namespace vawk {
 // 定义见 event_upstream.hpp。
 class EventUpstream;
 
+namespace detail {
+// 定义见 entity_store.hpp；实体只保存位置，不持有存储区。
+class EntityStore;
+}  // namespace detail
+
 /** @brief 一条持有关系的只读视图（供查询与释放策略使用）。 */
 struct HolderInfo {
     HolderKind kind  = HolderKind::System; ///< 持有者身份
@@ -51,7 +59,8 @@ struct HolderInfo {
 
 /**
  * @brief 接收事件的实体基类：每实体一条队列 + 一条工作线程。
- * @note  必须由 std::shared_ptr 托管；enable() 与 shutdown() 需按序调用。
+ * @note  推荐用 vawk::make_entity() 创建（唯一强引用由内部存储区持有）；
+ *        enable() 与 shutdown() 需按序调用。
  * @warning 不要在 on_event() 回调里销毁自身。
  */
 class Entity : public Holder, public std::enable_shared_from_this<Entity> {
@@ -143,6 +152,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
 
   private:
     friend class Holder;
+    friend class detail::EntityStore;
 
     // 在小本子上登记一笔持有；由 Holder::acquire() 调用。
     std::uint64_t add_holder(HolderKind kind, Holder* owner);
@@ -184,6 +194,10 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     bool                                     releasing_  = false; ///< 是否已请求释放
     ReleasePolicy release_policy_; ///< 可选：运行期释放策略（空 = 用 is_orphan）
     std::string label_; ///< 人读标签
+
+    // 存储区位置（唯一强引用在 detail::EntityStore 里）；未入册时 in_store_ 为 false。
+    std::list<std::shared_ptr<Entity>>::iterator store_pos_;
+    bool                                         in_store_ = false;
 };
 
 }  // namespace vawk

@@ -13,6 +13,8 @@
 //
 //  订阅即持有：首次订阅时 upstream 会以 HolderKind::Router 的身份
 //  acquire() 该实体。实体注销订阅时由 detach() 完成放手。
+//  两张索引表都只保存 weak_ptr（Listener::raw 仅用于比较 / 定位）：
+//  订阅关系不延长实体生命，唯一强引用在 detail::EntityStore 里。
 //
 //  子类必须实现 dispatch_once() 与 dispatch_loop()；基类提供
 //  start_event_loop() / stop_event_loop() 在后台线程跑 dispatch_loop()。
@@ -32,7 +34,8 @@ namespace vawk {
 
 /**
  * @brief 事件源基类：维护订阅索引，并向监听者投递事件。
- * @note  监听者以 shared_ptr 持有，因此实体在订阅期间不会被销毁。
+ * @note  监听者只以 weak_ptr 记录，订阅本身不延长实体生命；投递时
+ *        lock() 失败（实体已释放）的监听者会被跳过。
  */
 class EventUpstream : public Holder {
   public:
@@ -72,16 +75,16 @@ class EventUpstream : public Holder {
     /**
      * @brief 某个事件类型当前的订阅者快照（供状态展示）。
      * @param event_id 事件类型 ID。
-     * @return 订阅者列表；无订阅时为空。
-     * @note   返回的 shared_ptr 会在快照存活期间延长实体生命周期。
+     * @return 仍存活的订阅者列表；无订阅或全部过期时为空。
+     * @note   快照中的 shared_ptr 只在快照存活期间临时延长实体生命周期。
      */
     std::vector<std::shared_ptr<Entity>> subscribers(std::size_t event_id) const;
 
     /**
-     * @brief 实体请求放手：先摘掉订阅索引里的强引用，再放开持有记录。
+     * @brief 实体请求放手：先摘掉订阅索引里的条目，再放开持有记录。
      * @param entity 请求释放的实体。
-     * @note  只丢记录不摘订阅会让 listeners_ 继续强引用实体，
-     *        孤儿判定就永远无法真正回收实体。
+     * @note  索引表只存弱引用，但残留的订阅仍会参与派发与状态展示，
+     *        因此放手时必须一并摘除。
      */
     void on_disown(std::shared_ptr<Entity> entity) override;
 
@@ -111,7 +114,8 @@ class EventUpstream : public Holder {
     /**
      * @brief 锁内快照某个事件类型的监听者，供锁外投递。
      * @param event_id 事件类型 ID。
-     * @return 监听者强引用列表；未注册时为空。
+     * @return 仍存活的监听者强引用列表（投递期间临时保命）；未注册时为空。
+     * @note   已过期的监听者直接跳过；MVP 不做惰性清理。
      */
     std::vector<std::shared_ptr<Entity>> snapshot_listeners(std::size_t event_id) const;
 
@@ -120,8 +124,9 @@ class EventUpstream : public Holder {
   private:
     // listeners_ 的一项：实体 + 它在 entity_events_ 中的槽位。
     struct Listener {
-        std::shared_ptr<Entity> entity;
-        std::size_t             sub_slot = 0;
+        std::weak_ptr<Entity> entity; ///< 不延长实体生命
+        Entity*               raw = nullptr; ///< 仅用于比较 / 定位，不解引用
+        std::size_t           sub_slot = 0;
     };
 
     // entity_events_ 的一项：事件 ID + 它在 listeners_ 中的槽位。

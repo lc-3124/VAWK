@@ -26,7 +26,7 @@ void EventUpstream::subscribe(std::size_t event_id, std::shared_ptr<Entity> enti
     auto&             list      = listeners_[event_id];
     const std::size_t list_slot = list.size();
     const std::size_t sub_slot  = subs.size();
-    list.push_back({entity, sub_slot});
+    list.push_back({entity, entity.get(), sub_slot});
     subs.push_back({event_id, list_slot});
 
     // 订阅即持有；acquire() 内部按实体去重，重复调用不会产生多条记录。
@@ -59,7 +59,7 @@ void EventUpstream::unsubscribe(std::size_t event_id, const Entity* entity) {
         if (list_slot + 1 < list.size()) {
             Listener moved = list.back();
             list[list_slot] = moved;
-            entity_events_[moved.entity.get()][moved.sub_slot].list_slot = list_slot;
+            entity_events_[moved.raw][moved.sub_slot].list_slot = list_slot;
         }
         list.pop_back();
 
@@ -106,8 +106,8 @@ EventUpstream::subscribers(std::size_t event_id) const {
 void EventUpstream::on_disown(std::shared_ptr<Entity> entity) {
     if (!entity) return;
 
-    // 先摘订阅：listeners_ 持有的是 shared_ptr，只丢持有记录会让实体被
-    // 索引表一直强引用，永远回收不掉。
+    // 先摘订阅：索引表只存 weak_ptr，但残留条目仍会参与派发与状态展示，
+    // 放手时必须一并清掉。
     unsubscribe_all(entity.get());
 
     // 默认放手删掉本持有者名下的全部记录，不再回头动实体（避免重入）。
@@ -122,8 +122,10 @@ EventUpstream::snapshot_listeners(std::size_t event_id) const {
     if (event_id >= listeners_.size()) return result;
 
     result.reserve(listeners_[event_id].size());
-    for (const auto& l : listeners_[event_id])
-        result.push_back(l.entity);
+    for (const auto& l : listeners_[event_id]) {
+        // 已过期的条目直接跳过；MVP 不做惰性清理（方法保持 const）。
+        if (auto entity = l.entity.lock()) result.push_back(std::move(entity));
+    }
     return result;
 }
 
