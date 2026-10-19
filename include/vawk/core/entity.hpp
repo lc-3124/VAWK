@@ -11,7 +11,8 @@
 //    shutdown()   幂等：置停止标志、唤醒、join、detach()。
 //
 //  持有协议见 holder.hpp：持有者用 acquire() 在实体的小本子上登记；
-//  每注销一笔，实体检查自己是否成为孤儿，是则请求所有持有者放手。
+//  每注销一笔、以及 enable() 成功后，实体检查自己是否成为孤儿，
+//  是则请求所有持有者放手。
 //
 //  实体必须由 std::shared_ptr 托管；upstream 只存 weak_ptr，避免
 //  “实体 ↔ 事件源”互相强引用形成环。
@@ -27,7 +28,9 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 /** @brief 每个实体事件队列的容量；满时生产者阻塞。 */
@@ -39,6 +42,12 @@ namespace vawk {
 
 // 定义见 event_upstream.hpp。
 class EventUpstream;
+
+/** @brief 一条持有关系的只读视图（供查询与释放策略使用）。 */
+struct HolderInfo {
+    HolderKind kind  = HolderKind::System; ///< 持有者身份
+    Holder*    owner = nullptr; ///< 持有者实例
+};
 
 /**
  * @brief 接收事件的实体基类：每实体一条队列 + 一条工作线程。
@@ -76,6 +85,12 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     /** @brief 是否已启用。 */
     bool enabled() const noexcept { return enabled_.load(); }
 
+    /** @brief 人读标签（用于日志与状态展示）。 */
+    const std::string& label() const { return label_; }
+
+    /** @brief 设置人读标签。 */
+    void set_label(std::string label) { label_ = std::move(label); }
+
     /**
      * @brief 把事件放入本实体队列，由工作线程串行交给 on_event()。
      * @param evt 待处理事件。
@@ -86,14 +101,23 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     /** @brief 队列容量上限（编译期可用 VAWK_ENTITY_QUEUE_SIZE 覆盖）。 */
     static constexpr std::size_t kMaxQueue = VAWK_ENTITY_QUEUE_SIZE;
 
-    /// 运行期释放策略：参数是当前持有者身份列表，返回 true 表示可以释放。
-    using ReleasePolicy = std::function<bool(const std::vector<HolderKind>&)>;
+    /// 运行期释放策略：参数是当前持有关系列表，返回 true 表示可以释放。
+    using ReleasePolicy = std::function<bool(const std::vector<HolderInfo>&)>;
 
     /**
      * @brief 设置释放策略；传空函数则恢复默认的 `is_orphan()` 判定。
      * @note 建议在 enable() 之前设置；与判定过程共用 mtx_holders_ 互斥。
+     * @warning 策略在持有 mtx_holders_ 时调用：不要反向加锁（包括
+     *          holder_snapshot()），也不要回调实体。
      */
     void set_release_policy(ReleasePolicy policy);
+
+    /**
+     * @brief 导出当前持有者的只读快照。
+     * @return 每条持有关系的 {身份, 实例}。
+     * @note   owner 是裸指针，不延长持有者生命周期，仅用于身份比较。
+     */
+    std::vector<HolderInfo> holder_snapshot() const;
 
   protected:
     /**
@@ -110,8 +134,9 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     virtual void on_event(std::shared_ptr<event::Base> evt) = 0;
 
     /**
-     * @brief 孤儿判定：每注销一笔持有后调用一次。
-     * @return 默认实现：无持有者，或只剩 Router 时返回 true。
+     * @brief 孤儿判定：每注销一笔持有后、以及 enable() 成功后调用一次。
+     * @return 默认实现：没有任何 System 持有者时返回 true（Router / Parent /
+     *         Business 都不算保活）。
      * @note  调用时持有 mtx_holders_，重写实现不要反向加锁。
      */
     virtual bool is_orphan() const;
@@ -158,6 +183,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     // 如果实体已经触发了释放，那么就不再允许上游再触发释放，否则可能造成释放循环。
     bool                                     releasing_  = false; ///< 是否已请求释放
     ReleasePolicy release_policy_; ///< 可选：运行期释放策略（空 = 用 is_orphan）
+    std::string label_; ///< 人读标签
 };
 
 }  // namespace vawk

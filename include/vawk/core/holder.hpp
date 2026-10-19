@@ -6,9 +6,9 @@
 //  持有者（业务对象、EventUpstream 等）用 acquire() 在实体的“小本子”上
 //  登记一条持有记录，用 disown() 主动放手；析构时自动注销全部登记。
 //
-//  实体注销记录后若判定自己已成为孤儿（默认“只剩 Router”），会回调
-//  on_disown() 请求持有者放手。默认实现丢掉本持有者名下关于该实体的
-//  全部记录，不会回头调用 Entity::remove_holder()，因此不会重入。
+//  实体注销记录后若判定自己已成为孤儿（默认“没有任何 System 持有者”），
+//  会回调 on_disown() 请求持有者放手。默认实现丢掉本持有者名下关于该实体
+//  的全部记录，不会回头调用 Entity::remove_holder()，因此不会重入。
 
 #include <cstdint>
 #include <memory>

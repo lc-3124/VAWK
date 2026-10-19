@@ -98,6 +98,11 @@ void EventUpstream::detach(const Entity* entity) {
     disown(entity);
 }
 
+std::vector<std::shared_ptr<Entity>>
+EventUpstream::subscribers(std::size_t event_id) const {
+    return snapshot_listeners(event_id);
+}
+
 void EventUpstream::on_disown(std::shared_ptr<Entity> entity) {
     if (!entity) return;
 

@@ -70,6 +70,14 @@ class EventUpstream : public Holder {
     void detach(const Entity* entity);
 
     /**
+     * @brief 某个事件类型当前的订阅者快照（供状态展示）。
+     * @param event_id 事件类型 ID。
+     * @return 订阅者列表；无订阅时为空。
+     * @note   返回的 shared_ptr 会在快照存活期间延长实体生命周期。
+     */
+    std::vector<std::shared_ptr<Entity>> subscribers(std::size_t event_id) const;
+
+    /**
      * @brief 实体请求放手：先摘掉订阅索引里的强引用，再放开持有记录。
      * @param entity 请求释放的实体。
      * @note  只丢记录不摘订阅会让 listeners_ 继续强引用实体，

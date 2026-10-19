@@ -17,23 +17,39 @@ Entity::~Entity() {
 }
 
 bool Entity::enable() {
-    std::lock_guard lk(mtx_lifecycle_);
-    if (enabled_.load()) return true;
+    std::shared_ptr<Entity> self;
+    {
+        std::lock_guard lk(mtx_lifecycle_);
+        if (enabled_.load()) return true;
 
-    // 对象必须已由 shared_ptr 托管，否则 on_subscribe() 里取不到 self。
-    auto up = upstream_.lock();
-    if (!up) return false;
-    if (weak_from_this().expired()) return false;
+        // 对象必须已由 shared_ptr 托管，否则 on_subscribe() 里取不到 self。
+        auto up = upstream_.lock();
+        if (!up) return false;
+        if (weak_from_this().expired()) return false;
 
-    if (!on_subscribe(*up)) {
-        // 订阅中途失败：把已登记的条目全部回滚（含 Router 的持有记录）。
-        up->detach(this);
-        return false;
+        if (!on_subscribe(*up)) {
+            // 订阅中途失败：把已登记的条目全部回滚（含 Router 的持有记录）。
+            up->detach(this);
+            return false;
+        }
+
+        running_.store(true);
+        worker_ = std::thread([this] { thread_main(); });
+        enabled_.store(true);
+
+        self = shared_from_this(); // 保命：判定与释放期间对象不能提前销毁
     }
 
-    running_.store(true);
-    worker_ = std::thread([this] { thread_main(); });
-    enabled_.store(true);
+    // 启用完成后立即判定：若已无 System 持有者，立刻请求 Router 放手。
+    // 必须在 mtx_lifecycle_ 外判定：request_disown() 的回调可能反过来
+    // 调 shutdown() 抢同一把锁。
+    bool orphan = false;
+    {
+        std::lock_guard lk(mtx_holders_);
+        orphan = is_orphan();
+    }
+    if (orphan) request_disown();
+
     return true;
 }
 
@@ -95,16 +111,29 @@ void Entity::remove_holder(std::uint64_t token) {
 }
 
 bool Entity::is_orphan() const {
-    // 调用方持有 mtx_holders_。
+    // 调用方已持有 mtx_holders_
     if (release_policy_) {
-        std::vector<HolderKind> kinds;
-        kinds.reserve(holders_.size());
-        for (const auto& h : holders_) kinds.push_back(h.kind);
-        return release_policy_(kinds);
+        std::vector<HolderInfo> info;
+        info.reserve(holders_.size());
+        for (const auto& h : holders_)
+            info.push_back({h.kind, h.owner});
+        return release_policy_(info);
     }
-    if (holders_.empty()) return true;
-    if (holders_.size() != 1) return false;
-    return holders_.front().kind == HolderKind::Router;
+
+    // 默认：没有任何 System 持有者即孤儿（Router / Parent / Business 都不算保活）。
+    for (const auto& h : holders_)
+        if (h.kind == HolderKind::System)
+            return false;
+    return true;
+}
+
+std::vector<HolderInfo> Entity::holder_snapshot() const {
+    std::lock_guard lk(mtx_holders_);
+    std::vector<HolderInfo> out;
+    out.reserve(holders_.size());
+    for (const auto& h : holders_)
+        out.push_back({h.kind, h.owner});
+    return out;
 }
 
 void Entity::set_release_policy(ReleasePolicy policy) {

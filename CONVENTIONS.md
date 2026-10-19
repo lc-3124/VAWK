@@ -37,16 +37,20 @@
   匹配，传 `const Entity*` 按裸指针匹配；两者都只维护持有记录，**不**销毁实体。
 - 实体小本子是一张 `{token, kind, owner}` 表，token 单调递增；注销按 token
   线性查找 + swap-pop，持有者只有个位数，不引入哈希。
-- 每次注销一笔后，若实体已启用则调用 `is_orphan()` 判定；默认语义是
-  "只剩 Router（订阅关系）即孤儿"。判定为孤儿就走 `request_disown()`：
+- 每次注销一笔后，若实体已启用则调用 `is_orphan()` 判定；`enable()` 成功
+  后也会在锁外主动判定一次。默认语义是"没有任何 `System` 持有者即孤儿"
+  （`Router` / `Parent` / `Business` 都不算保活）。判定为孤儿就走
+  `request_disown()`：
   自保 → 锁内取走全部 owner 并清空小本子 → 锁外逐个调 `on_disown()`。
   `request_disown()` 收尾会复位内部的 `releasing_` 标志，因此持有者若没有
   真正放手，后续持有变化仍可再次触发放手请求。
 - 取消最后一个订阅会自动放开 Router 持有（`subscribe` 与 `unsubscribe` 对称）；
   `unsubscribe()` 只把"该实体已无任何订阅"记为待放手，锁外再调
   `disown(const Entity*)`，避免在索引锁内回调实体。
-- 放手条件可用 `set_release_policy()` 运行期配置，留空则用默认 `is_orphan()`
-  判定；策略在 `mtx_holders_` 内调用，不得反向加锁或回调实体。
+- 放手条件可用 `set_release_policy()` 运行期配置，策略参数是
+  `std::vector<HolderInfo>`（每条含 `kind` 与持有者实例 `owner`），返回 true
+  表示可以释放；留空则用默认 `is_orphan()` 判定。策略在 `mtx_holders_` 内
+  调用，不得反向加锁或回调实体。
 - `on_disown()` 默认只丢自己那条记录，**不得**回头调 `remove_holder()`，
   否则重入。
 - 实体两阶段：构造只存 `upstream` 的 `weak_ptr`（不入册、不起线程）；
