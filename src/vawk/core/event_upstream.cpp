@@ -75,8 +75,8 @@ void EventUpstream::unsubscribe(std::size_t event_id, const Entity* entity) {
             drop_hold = true;  // 该实体已无任何订阅，Router 不再需要持有它
         }
     }
-    // 锁外释放：release_by_ptr 会通知实体注销，可能触发实体释放流程。
-    if (drop_hold) release_by_ptr(entity);
+    // 锁外释放：disown 会通知实体注销，可能触发实体释放流程。
+    if (drop_hold) disown(entity);
 }
 
 void EventUpstream::unsubscribe_all(const Entity* entity) {
@@ -95,10 +95,10 @@ void EventUpstream::unsubscribe_all(const Entity* entity) {
 
 void EventUpstream::detach(const Entity* entity) {
     unsubscribe_all(entity);
-    release_by_ptr(entity);
+    disown(entity);
 }
 
-void EventUpstream::holder_release(std::shared_ptr<Entity> entity) {
+void EventUpstream::on_disown(std::shared_ptr<Entity> entity) {
     if (!entity) return;
 
     // 先摘订阅：listeners_ 持有的是 shared_ptr，只丢持有记录会让实体被
@@ -106,7 +106,7 @@ void EventUpstream::holder_release(std::shared_ptr<Entity> entity) {
     unsubscribe_all(entity.get());
 
     // 默认放手删掉本持有者名下的全部记录，不再回头动实体（避免重入）。
-    Holder::holder_release(std::move(entity));
+    Holder::on_disown(std::move(entity));
 }
 
 std::vector<std::shared_ptr<Entity>>

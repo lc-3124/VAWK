@@ -13,7 +13,7 @@ Entity::Entity(std::shared_ptr<EventUpstream> upstream)
     : upstream_(std::move(upstream)) {}
 
 Entity::~Entity() {
-    release_impl();
+    shutdown_impl();
 }
 
 bool Entity::enable() {
@@ -37,14 +37,14 @@ bool Entity::enable() {
     return true;
 }
 
-void Entity::release() {
-    // 先取强引用：release_impl() 期间本对象不会被析构掉。
+void Entity::shutdown() {
+    // 先取强引用：shutdown_impl() 期间本对象不会被析构掉。
     auto self = weak_from_this().lock();
-    release_impl();
+    shutdown_impl();
     (void)self;
 }
 
-void Entity::release_impl() {
+void Entity::shutdown_impl() {
     {
         std::lock_guard lk(mtx_lifecycle_);
         if (!enabled_.exchange(false)) return;
@@ -91,7 +91,7 @@ void Entity::remove_holder(std::uint64_t token) {
         if (enabled_.load()) orphan = is_orphan();
     }
     // 判定与回调都在锁外收尾，持有者可以安全地反向操作实体。
-    if (orphan) request_release();
+    if (orphan) request_disown();
 }
 
 bool Entity::is_orphan() const {
@@ -112,7 +112,7 @@ void Entity::set_release_policy(ReleasePolicy policy) {
     release_policy_ = std::move(policy);
 }
 
-void Entity::request_release() {
+void Entity::request_disown() {
     // 自保：回调过程中即使持有者丢掉全部引用，本对象也活到函数结束。
     auto self = shared_from_this();
 
@@ -128,7 +128,7 @@ void Entity::request_release() {
 
     // 锁外逐个请求放手；默认实现只删自己的记录，不会回头重入本函数。
     for (auto* h : targets)
-        if (h) h->holder_release(self);
+        if (h) h->on_disown(self);
 
     // 允许后续持有变化再次触发；本次若已真正析构则不会再执行到这里。
     {

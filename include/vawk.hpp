@@ -18,7 +18,7 @@
 //         │
 //         └── Input (占位)        读取终端输入 → 事件
 //
-//    vawk::Holder        ──  持有者基类（acquire / release / holder_release）
+//    vawk::Holder        ──  持有者基类（acquire / disown / on_disown）
 //         ├── Entity
 //         └── EventUpstream
 //

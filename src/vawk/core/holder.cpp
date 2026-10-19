@@ -35,7 +35,7 @@ std::uint64_t Holder::acquire(const std::shared_ptr<Entity>& entity, HolderKind 
     return token;
 }
 
-void Holder::release(const std::shared_ptr<Entity>& entity) {
+void Holder::disown(const std::shared_ptr<Entity>& entity) {
     if (!entity) return;
 
     std::uint64_t token = 0;
@@ -48,11 +48,11 @@ void Holder::release(const std::shared_ptr<Entity>& entity) {
         if (it != held_.end() - 1) *it = std::move(held_.back());
         held_.pop_back();
     }
-    // 实体注销可能触发孤儿判定与 holder_release 回调，必须在锁外调用。
+    // 实体注销可能触发孤儿判定与 on_disown 回调，必须在锁外调用。
     entity->remove_holder(token);
 }
 
-void Holder::release_by_ptr(const Entity* entity) {
+void Holder::disown(const Entity* entity) {
     if (!entity) return;
 
     std::shared_ptr<Entity> target;
@@ -70,11 +70,11 @@ void Holder::release_by_ptr(const Entity* entity) {
     if (target) target->remove_holder(token);
 }
 
-void Holder::holder_release(std::shared_ptr<Entity> entity) {
+void Holder::on_disown(std::shared_ptr<Entity> entity) {
     if (!entity) return;
 
     // 默认放手：删掉该实体在本持有者名下的全部记录（一步到位）。实体已在
-    // request_release() 里清空小本子，这里不能再调 remove_holder()，否则会重入。
+    // request_disown() 里清空小本子，这里不能再调 remove_holder()，否则会重入。
     // 被移除的 shared_ptr 先收集，锁外析构，避免在锁内触发实体析构。
     std::vector<std::shared_ptr<Entity>> doomed;
     {

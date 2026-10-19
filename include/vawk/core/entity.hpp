@@ -8,7 +8,7 @@
 //    构造         只记下 upstream 的 weak_ptr，不登记、不起线程。
 //    enable()     校验 weak_from_this() 有效 → on_subscribe() 订阅 →
 //                 失败则 up->detach(this) 回滚 → 成功则启动每实体线程。
-//    release()    幂等：置停止标志、唤醒、join、detach()。
+//    shutdown()   幂等：置停止标志、唤醒、join、detach()。
 //
 //  持有协议见 holder.hpp：持有者用 acquire() 在实体的小本子上登记；
 //  每注销一笔，实体检查自己是否成为孤儿，是则请求所有持有者放手。
@@ -42,7 +42,7 @@ class EventUpstream;
 
 /**
  * @brief 接收事件的实体基类：每实体一条队列 + 一条工作线程。
- * @note  必须由 std::shared_ptr 托管；enable() 与 release() 需按序调用。
+ * @note  必须由 std::shared_ptr 托管；enable() 与 shutdown() 需按序调用。
  * @warning 不要在 on_event() 回调里销毁自身。
  */
 class Entity : public Holder, public std::enable_shared_from_this<Entity> {
@@ -53,7 +53,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
      */
     explicit Entity(std::shared_ptr<EventUpstream> upstream);
 
-    /** @brief 析构：等价于 release()，确保工作线程退出并注销订阅。 */
+    /** @brief 析构：等价于 shutdown()，确保工作线程退出并注销订阅。 */
     ~Entity() override;
 
     Entity(const Entity&)            = delete;
@@ -71,7 +71,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
      * @brief 停用并注销：幂等。
      * @warning 若在工作线程（on_event()）内销毁自身，将直接 std::terminate。
      */
-    void release();
+    void shutdown();
 
     /** @brief 是否已启用。 */
     bool enabled() const noexcept { return enabled_.load(); }
@@ -126,10 +126,10 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     void remove_holder(std::uint64_t token);
 
     // 自保（shared_from_this）→ 锁内取走全部持有者 → 锁外逐个请求放手。
-    void request_release();
+    void request_disown();
 
-    // release() 的实际实现；析构与 release() 共用。
-    void release_impl();
+    // shutdown() 的实际实现；析构与 shutdown() 共用。
+    void shutdown_impl();
 
     // 工作线程主体：cv 等待队列非空或停止，锁外调用 on_event()。
     void thread_main();
@@ -146,7 +146,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
 
     mutable std::mutex mtx_holders_; ///< 保护 holders_
     std::mutex         mtx_eventbuffer_; ///< 保护 event_buffer_ 与 running_
-    std::mutex         mtx_lifecycle_; ///< 串行化 enable / release
+    std::mutex         mtx_lifecycle_; ///< 串行化 enable / shutdown
 
     std::condition_variable cv_eventbuffer_; ///< 队列非空或停止
     std::condition_variable cv_space_; ///< 队列出现空位

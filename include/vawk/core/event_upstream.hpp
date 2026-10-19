@@ -75,7 +75,7 @@ class EventUpstream : public Holder {
      * @note  只丢记录不摘订阅会让 listeners_ 继续强引用实体，
      *        孤儿判定就永远无法真正回收实体。
      */
-    void holder_release(std::shared_ptr<Entity> entity) override;
+    void on_disown(std::shared_ptr<Entity> entity) override;
 
     //-- 派发（纯虚）
 
