@@ -50,13 +50,14 @@
 - **两本账由同一把双锁原子更新**：`std::scoped_lock lk(mtx_held_,
   entity->mtx_holders_)`。登记与注销都在这一把双锁内完成，因此不存在“本地已
   删、实体未删”的中间态；`scoped_lock` 内部用 `try_lock` 规避死锁，**不需要**
-  约定加锁顺序。注销时 `is_orphan()` 判定也在锁内完成，`request_disown()`
+  约定加锁顺序。注销时释放策略判定也在锁内完成，`request_disown()`
   一律放到锁外调用（它会回调其他持有者）。
 - 持有者析构时先把本地表整体取走并清空，再逐个实体只锁 `mtx_holders_`
   摘掉自己的条目；同样在锁外 `request_disown()`。
-- 每次注销一笔后，若实体已启用则调用 `is_orphan()` 判定；`enable()` 成功
-  后也会在锁外主动判定一次。默认语义是"没有任何 `System` 持有者即孤儿"
-  （`Router` / `Parent` / `Business` 都不算保活）。判定为孤儿就走
+- 每次注销一笔后，若实体已启用则调用释放策略回调；`enable()` 成功
+  后也会在锁外主动判定一次。统一由 `release_policy` 回调判定：默认策略为
+  无 `System` 持有者（`Router` / `Parent` / `Business` 都不算保活），
+  `set_release_policy({})` 恢复默认。判定为孤儿就走
   `request_disown()`：
   自保 → 锁内取走全部 owner 并清空小本子 → 锁外逐个调 `on_disown()`。
   `request_disown()` 收尾会复位内部的 `releasing_` 标志，因此持有者若没有
@@ -66,8 +67,8 @@
   `disown(const Entity*)`，避免在索引锁内回调实体。
 - 放手条件可用 `set_release_policy()` 运行期配置，策略参数是
   `std::vector<HolderInfo>`（每条含 `kind` 与持有者实例 `owner`），返回 true
-  表示可以释放；留空则用默认 `is_orphan()` 判定。策略在 `mtx_holders_` 内
-  调用，不得反向加锁或回调实体。
+  表示可以释放；留空则恢复默认策略（无 `System` 持有者即可释放）。策略在
+  `mtx_holders_` 内调用，不得反向加锁或回调实体。
 - `on_disown()` 默认只丢自己那条记录，**不得**回头动实体的小本子
   （`request_disown()` 已清空），否则重入。
 - 实体两阶段：构造只存 `upstream` 的 `weak_ptr`（不入册、不起线程）；
@@ -79,6 +80,15 @@
 - 回调（`on_event` / `on_disown`）中不得销毁自身；在 `on_event()` 所在的
   工作线程里析构实体会直接 `std::terminate`（避免 join 自身与随后的 UAF）。
   队列满时生产者阻塞，容量由 `VAWK_ENTITY_QUEUE_SIZE` 控制。
+
+### 业务与机构的访问方式
+
+- **业务**：`make_entity<T>()` → `EntityHandle<T>`，访问即临时持有
+  （`get()` / `operator->()` / `with()` 期间内部 `lock()`），句柄本身不保活。
+- **机构**：`Entity::make_internal<T>()`（protected）→ `weak_ptr<T>`，不建立
+  契约；父组件用 `EntityHandle<...>::hold(w, HolderKind::System)` 或
+  `Holder::acquire` 建立契约来保活。
+- `Holder` 的持有接口（`acquire` / `disown`）保持 protected，业务不直接使用。
 
 ## 注释
 

@@ -406,7 +406,7 @@ void cmd_keep(const std::string& ent, const std::vector<std::string>& names) {
         return;
     }
 
-    // 不带名字：传空 ReleasePolicy，恢复默认的 is_orphan() 判定。
+    // 不带名字：传空 ReleasePolicy，恢复默认策略（无 System 持有者）。
     if (names.empty()) {
         (*h)->set_release_policy({});
         say("keep " + ent + ": default", Color::Green);

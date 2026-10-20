@@ -46,7 +46,7 @@ bool Entity::enable() {
     bool orphan = false;
     {
         std::lock_guard lk(mtx_holders_);
-        orphan = is_orphan();
+        orphan = release_policy_(build_holder_info_locked());
     }
     if (orphan) request_disown();
 
@@ -88,35 +88,31 @@ void Entity::shutdown_impl() {
 
 //- 持有协议
 
-bool Entity::is_orphan() const {
-    // 调用方已持有 mtx_holders_
-    if (release_policy_) {
-        std::vector<HolderInfo> info;
-        info.reserve(holders_.size());
-        for (const auto& h : holders_)
-            info.push_back({h.kind, h.owner});
-        return release_policy_(info);
-    }
-
-    // 默认：没有任何 System 持有者即孤儿（Router / Parent / Business 都不算保活）。
-    for (const auto& h : holders_)
+bool Entity::default_release_policy(const std::vector<HolderInfo>& holders) {
+    for (const auto& h : holders)
         if (h.kind == HolderKind::System)
             return false;
     return true;
 }
 
+std::vector<HolderInfo> Entity::build_holder_info_locked() const {
+    std::vector<HolderInfo> info;
+    info.reserve(holders_.size());
+    for (const auto& h : holders_)
+        info.push_back({h.kind, h.owner});
+    return info;
+}
+
 std::vector<HolderInfo> Entity::holder_snapshot() const {
     std::lock_guard lk(mtx_holders_);
-    std::vector<HolderInfo> out;
-    out.reserve(holders_.size());
-    for (const auto& h : holders_)
-        out.push_back({h.kind, h.owner});
-    return out;
+    return build_holder_info_locked();
 }
 
 void Entity::set_release_policy(ReleasePolicy policy) {
     std::lock_guard lk(mtx_holders_);
-    release_policy_ = std::move(policy);
+    release_policy_ = policy
+        ? std::move(policy)
+        : ReleasePolicy(&Entity::default_release_policy);
 }
 
 void Entity::request_disown() {

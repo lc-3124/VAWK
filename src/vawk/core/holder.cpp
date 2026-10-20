@@ -32,7 +32,8 @@ Holder::~Holder() {
             if (it == e->holders_.end()) continue;
             if (it != e->holders_.end() - 1) *it = std::move(e->holders_.back());
             e->holders_.pop_back();
-            if (e->enabled_.load()) orphan = e->is_orphan();
+            if (e->enabled_.load())
+                orphan = e->release_policy_(e->build_holder_info_locked());
         }
         // 回调会摸别的 holder，必须在锁外。
         if (orphan) e->request_disown();
@@ -120,7 +121,8 @@ void Holder::disown_locked_(Entity* entity, bool& orphan) {
     }
 
     // 3) 已启用才判定；结果由调用方在锁外收尾。
-    if (entity->enabled_.load()) orphan = entity->is_orphan();
+    if (entity->enabled_.load())
+        orphan = entity->release_policy_(entity->build_holder_info_locked());
 }
 
 void Holder::on_disown(std::shared_ptr<Entity> entity) {

@@ -106,7 +106,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     using ReleasePolicy = std::function<bool(const std::vector<HolderInfo>&)>;
 
     /**
-     * @brief 设置释放策略；传空函数则恢复默认的 `is_orphan()` 判定。
+     * @brief 设置释放策略；传空函数则恢复默认策略（无 System 持有者即可释放）。
      * @note 建议在 enable() 之前设置；与判定过程共用 mtx_holders_ 互斥。
      * @warning 策略在持有 mtx_holders_ 时调用：不要反向加锁（包括
      *          holder_snapshot()），也不要回调实体。
@@ -140,31 +140,30 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     virtual void on_event(std::shared_ptr<event::Base> evt) = 0;
 
     /**
-     * @brief 孤儿判定：每注销一笔持有后、以及 enable() 成功后调用一次。
-     * @return 默认实现：没有任何 System 持有者时返回 true（Router / Parent /
-     *         Business 都不算保活）。
-     * @note  调用时持有 mtx_holders_，重写实现不要反向加锁。
-     */
-    virtual bool is_orphan() const;
-
-    /**
-     * @brief 机构内部创建：实体交给存储区，返回裸指针。
+     * @brief 机构内部创建：实体交给存储区，返回弱引用。
      * @tparam T 实体类型，须派生自 Entity。
      * @param args 转发给 T 的构造参数。
-     * @return 裸指针，不建立任何契约；生命周期由调用方（父组件）的契约保证。
+     * @return weak_ptr<T>，不建立任何契约；父组件需自行建立 System 契约
+     *         （用 EntityHandle 或 Holder::acquire）来保活。
      * @note   仅派生类可调用：业务侧请用 vawk::make_entity() 拿 EntityHandle。
-     * @warning 裸指针不保活：它随父组件的契约解除而失效，不得跨契约保存。
+     * @warning 弱引用不保活：契约解除后随之过期，访问前必须 lock() 检查。
      */
     template <class T, class... A>
-    static T* make_internal(A&&... args) {
+    static std::weak_ptr<T> make_internal(A&&... args) {
         auto sp = std::make_shared<T>(std::forward<A>(args)...);
         detail::EntityStore::instance().attach(sp);
-        return sp.get();
+        return std::weak_ptr<T>(sp);
     }
 
   private:
     friend class Holder;
     friend class detail::EntityStore;
+
+    // 默认释放策略：没有任何 System 持有者即可释放（Router / Parent /
+    // Business 都不算保活）。
+    static bool default_release_policy(const std::vector<HolderInfo>& holders);
+
+    std::vector<HolderInfo> build_holder_info_locked() const; ///< 调用方须持 mtx_holders_
 
     // 自保（shared_from_this）→ 锁内取走全部持有者 → 锁外逐个请求放手。
     void request_disown();
@@ -196,7 +195,7 @@ class Entity : public Holder, public std::enable_shared_from_this<Entity> {
     std::thread                              worker_; ///< 工作线程
     // 如果实体已经触发了释放，那么就不再允许上游再触发释放，否则可能造成释放循环。
     bool                                     releasing_  = false; ///< 是否已请求释放
-    ReleasePolicy release_policy_; ///< 可选：运行期释放策略（空 = 用 is_orphan）
+    ReleasePolicy release_policy_ = &Entity::default_release_policy; ///< 释放策略；默认 = 无 System 持有者，可用 set_release_policy 覆盖；传空恢复默认
     std::string label_; ///< 人读标签
 
     // 存储区位置（唯一强引用在 detail::EntityStore 里）；未入册时 in_store_ 为 false。
