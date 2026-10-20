@@ -3,7 +3,7 @@
 //  用 3 个固定的 System 持有者（A / B / C）、1 个常驻 EventRouter 和
 //  4 个事件类型，把下面几条路径都跑一遍：
 //
-//    - make ent / enable：创建后由内部 EntityStore 保活，表里只存弱引用
+//    - make ent / enable：实体由内部 EntityStore 保活，表里存 EntityHandle
 //    - listen：订阅即持有（Router 以 HolderKind::Router 登记）
 //    - hold / disown：System 持有者决定实体是否算孤儿
 //    - keep：用 set_release_policy() 覆盖默认的孤儿判定
@@ -191,16 +191,17 @@ class DemoEntity : public vawk::Entity {
 //- 全局状态
 
 std::shared_ptr<vawk::EventRouter> g_router;
-std::map<std::string, std::weak_ptr<DemoEntity>> g_live; ///< 弱引用：唯一强引用在 EntityStore
+// 句柄即契约：唯一强引用在 EntityStore，这里不保存 weak_ptr。
+std::map<std::string, vawk::EntityHandle<DemoEntity>> g_live;
 NamedHolder g_a{"A"};
 NamedHolder g_b{"B"};
 NamedHolder g_c{"C"};
 
-// 按名字取实体：失败即表示条目不存在或实体已被存储区释放。
-std::shared_ptr<DemoEntity> find_entity(const std::string& name) {
+// 按名字取实体句柄：条目不存在或实体已被存储区释放时返回 nullptr。
+vawk::EntityHandle<DemoEntity>* find_entity(const std::string& name) {
     auto it = g_live.find(name);
-    if (it == g_live.end()) return nullptr;
-    return it->second.lock();
+    if (it == g_live.end() || it->second.expired()) return nullptr;
+    return &it->second;
 }
 
 NamedHolder* find_holder(const std::string& name) {
@@ -264,34 +265,29 @@ void cmd_make(const std::vector<std::string>& args) {
         return;
     }
 
-    // 唯一强引用交给内部存储区，这里只留弱引用。
+    // 唯一强引用交给内部存储区，这里拿到的是绑定 Business 契约的句柄。
     g_live[name] = vawk::make_entity<DemoEntity>(g_router, name);
     say("created: " + name, Color::Green);
 }
 
 void cmd_enable(const std::string& name) {
-    auto it = g_live.find(name);
-    if (it == g_live.end()) {
+    auto* h = find_entity(name);
+    if (!h || h->expired()) {
         say("entity not found: " + name, Color::Red);
         return;
     }
 
-    auto       e  = it->second.lock();
-    if (!e) {
-        say("entity not found: " + name, Color::Red);
-        return;
-    }
-
-    // 不额外持有：enable() 判为孤儿时会请存储区松手，
-    // 局部 shared_ptr 离开作用域后实体即在弱引用上过期。
-    const bool ok = e->enable();
+    // 访问期票留到函数末尾：enable() 判为孤儿时存储区会松手，
+    // 最后一份强引用（这张期票）在这里放掉后才真正析构。
+    auto       access = h->get();
+    const bool ok     = access->enable();
     say(ok ? "enabled: " + name : "enable failed: " + name,
         ok ? Color::Green : Color::Red);
 }
 
 void cmd_listen(const std::string& ent, const std::string& evt) {
-    auto e = find_entity(ent);
-    if (!e) {
+    auto* h = find_entity(ent);
+    if (!h) {
         say("entity not found: " + ent, Color::Red);
         return;
     }
@@ -300,25 +296,27 @@ void cmd_listen(const std::string& ent, const std::string& evt) {
         say("unknown event: " + evt, Color::Red);
         return;
     }
-    e->listen(d->id);
+    (*h)->listen(d->id);
     say(ent + " listens " + d->name, Color::Green);
 }
 
 void cmd_status_entity(const std::string& name) {
-    auto e = find_entity(name);
-    if (!e) {
+    auto* h = find_entity(name);
+    if (!h) {
         say("entity not found: " + name, Color::Red);
         return;
     }
 
     std::vector<std::string> holders;
-    for (const auto& h : e->holder_snapshot()) holders.push_back(holder_name(h.owner));
+    // 句柄自身的 Business 契约随句柄存在，不代表外部持有者，不参与展示。
+    for (const auto& hi : (*h)->holder_snapshot())
+        if (hi.kind != vawk::HolderKind::Business) holders.push_back(holder_name(hi.owner));
 
     std::ostringstream os;
     os << paint("Entity:", Color::Bold) << "\n"
-       << paint("  label : ", Color::Dim) << e->label() << "\n"
+       << paint("  label : ", Color::Dim) << (*h)->label() << "\n"
        << paint("  holder : ", Color::Dim) << join(holders, ", ") << "\n"
-       << paint("  is_on : ", Color::Dim) << (e->enabled() ? "true" : "false");
+       << paint("  is_on : ", Color::Dim) << ((*h)->enabled() ? "true" : "false");
     say(os.str());
 }
 
@@ -334,8 +332,8 @@ void cmd_status_router() {
 }
 
 void cmd_hold(const std::string& ent, const std::vector<std::string>& names) {
-    auto e = find_entity(ent);
-    if (!e) {
+    auto* h = find_entity(ent);
+    if (!h) {
         say("entity not found: " + ent, Color::Red);
         return;
     }
@@ -344,20 +342,25 @@ void cmd_hold(const std::string& ent, const std::vector<std::string>& names) {
         return;
     }
 
+    // 期票留到函数末尾，与旧实现一致：最后一个 unhold 触发释放请求时，
+    // 实体要等这张期票放掉后才真正析构。
+    auto access = h->get();
+
     for (const auto& n : names) {
-        auto* h = find_holder(n);
-        if (!h) {
+        auto* holder = find_holder(n);
+        if (!holder) {
             say("unknown holder: " + n, Color::Red);
             continue;
         }
-        h->hold(e);
+        // Holder 的登记接口吃 shared_ptr：从实体自身取一份，登记后它只留 weak。
+        holder->hold(access->shared_from_this());
         say(ent + " held by " + n, Color::Green);
     }
 }
 
 void cmd_disown(const std::string& ent, const std::vector<std::string>& names) {
-    auto e = find_entity(ent);
-    if (!e) {
+    auto* h = find_entity(ent);
+    if (!h) {
         say("entity not found: " + ent, Color::Red);
         return;
     }
@@ -366,24 +369,28 @@ void cmd_disown(const std::string& ent, const std::vector<std::string>& names) {
         return;
     }
 
+    // 期票留到函数末尾，与旧实现一致：最后一个 unhold 触发释放请求时，
+    // 实体要等这张期票放掉后才真正析构。
+    auto access = h->get();
+
     for (const auto& n : names) {
-        auto* h = find_holder(n);
-        if (!h) {
+        auto* holder = find_holder(n);
+        if (!holder) {
             say("unknown holder: " + n, Color::Red);
             continue;
         }
-        h->unhold(e);
+        holder->unhold(access->shared_from_this());
         say(ent + " disowned by " + n, Color::Green);
     }
 }
 
 void cmd_list_entity() {
     for (const auto& entry : g_live) {
-        auto e = entry.second.lock();
-        if (e)
-            say("entity " + entry.first + (e->enabled() ? " (is_on=true)" : " (is_on=false)"));
-        else
+        if (entry.second.expired())
             say("entity " + entry.first + " (released)");
+        else
+            say("entity " + entry.first +
+                (entry.second->enabled() ? " (is_on=true)" : " (is_on=false)"));
     }
 }
 
@@ -393,15 +400,15 @@ void cmd_list_event() {
 }
 
 void cmd_keep(const std::string& ent, const std::vector<std::string>& names) {
-    auto e = find_entity(ent);
-    if (!e) {
+    auto* h = find_entity(ent);
+    if (!h) {
         say("entity not found: " + ent, Color::Red);
         return;
     }
 
     // 不带名字：传空 ReleasePolicy，恢复默认的 is_orphan() 判定。
     if (names.empty()) {
-        e->set_release_policy({});
+        (*h)->set_release_policy({});
         say("keep " + ent + ": default", Color::Green);
         return;
     }
@@ -409,18 +416,18 @@ void cmd_keep(const std::string& ent, const std::vector<std::string>& names) {
     std::vector<vawk::Holder*> keepers;
     std::vector<std::string>   accepted;
     for (const auto& n : names) {
-        auto* h = find_holder(n);
-        if (!h) {
+        auto* holder = find_holder(n);
+        if (!holder) {
             say("unknown holder: " + n, Color::Red);
             continue;
         }
-        keepers.push_back(h);
+        keepers.push_back(holder);
         accepted.push_back(n);
     }
     if (keepers.empty()) return;
 
     // 策略在实体持 mtx_holders_ 时调用：只比较裸指针，不加锁、不回调。
-    e->set_release_policy([keepers](const std::vector<vawk::HolderInfo>& hs) {
+    (*h)->set_release_policy([keepers](const std::vector<vawk::HolderInfo>& hs) {
         for (const auto& h : hs)
             for (auto* k : keepers)
                 if (h.owner == k) return false;  // 有保活者 → 不释放
