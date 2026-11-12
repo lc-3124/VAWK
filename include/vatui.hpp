@@ -15,7 +15,6 @@
 //    fb.printText({.col = 0, .row = 0, .text = "Hi", .style = {...}});
 //    fb.swap();
 //
-//  本库拆分为 hpp（声明）与 cpp（实现）两部分。
 
 #include <cstdint>
 #include <initializer_list>
@@ -30,7 +29,7 @@
 
 namespace vatui {
 
-//- 颜色 SGR 辅助函数（立即转换）
+//- 颜色 SGR 辅助函数
 //
 // 每次调用都在首次使用时检测终端色深（此后缓存），
 // 并自动把输入转换为终端原生色深。
@@ -45,11 +44,11 @@ namespace vatui {
 //   Rgb    → C24: 直通
 //            C8:  经 rgb_to_256 降位转换
 //            C4:  经 nearest_4bit 降位转换
-//
-// 实现见 src/vatui.cpp。
+// lc3124: 不是所有终端都兼容全色彩，在此实现兼容层，自动探测终端颜色深度，然后找
+// 当前深度下与预期最接近的颜色
 
 /**
- * @brief 前景色：把输入转换为当前色深下的 SGR 序列。
+ * @brief 前景色：把输入转换为当前色深下的 SGR 序列，转换规则已经在前文详述。
  * @param c 4-bit / 8-bit / 24-bit 颜色，或 Trans。
  * @return 对应的前景色 SGR 串。
  */
@@ -158,9 +157,11 @@ struct FillArgs {
 
 /**
  * @brief 双缓冲单元格矩阵，负责按差异输出到终端。
+ * @note lc3124(261112): 当前这个模块还在验证，实际的输出不该让swap()来做，
+ *       在之后的封装中，swap方法会退化成仅仅将缓冲区合成一段可渲染命令序列
  *
  * 所有绘制都写入缓冲区，最后统一由 swap() 与上一帧比较后增量输出。
- * 私有成员仅供 VaTui 访问（friend）。
+ * 私有成员仅供 VaTui 友元访问。
  */
 class Framebuffer {
   public:
@@ -209,6 +210,8 @@ class Framebuffer {
      *       宽字符，会用源自身样式的一个空格替换。
      * @param offset 拷贝到本对象的落点。
      * @param src    源缓冲区。
+     * @note lc3124(261112): 目前支持透明，我考虑过要不要支持部分透明和半透明，不过
+     *       我应该暂时节约精力
      */
     void importFrame(PositionArgs offset, const Framebuffer& src);
 
@@ -221,11 +224,11 @@ class Framebuffer {
     friend class VaTui;
 
     struct Cell {
-        bool        isLong_    = false;
-        bool        isHead_    = false;
-        char32_t    cp_        = 0;
-        char        data_      = ' ';
-        uint32_t    sgr_id_    = 0;
+        bool        isLong_    = false; ///< 如果这个cell要容纳多宽符号，那么标记为true
+        bool        isHead_    = false; ///< 如果这个cell是多宽字符的开始列，标记为true
+        char32_t    cp_        = 0;     ///< 可以被直接拷贝走的数据
+        char        data_      = ' ';   ///< 非多宽字符用这个存储
+        uint32_t    sgr_id_    = 0;     ///< sgr池的索引id，用于从池取得sgr序列
     };
 
     Cell& cell_at_(int col, int row) {
@@ -239,6 +242,9 @@ class Framebuffer {
         cell.isHead_ = true;
         // 不动 sgr_id_——由调用方设置
     }
+
+// lc3124: 下方的内联函数全部由ai枚举和实现，包括sgr池的维护、sgr序列的计算、拼接，和必要的数据成员
+// 目的是支撑我为`vatui`设计的功能
 
     // sgr_id 编码：
     //   第 31 位: has_fg（1 = 设置了前景色，0 = TRANS）
